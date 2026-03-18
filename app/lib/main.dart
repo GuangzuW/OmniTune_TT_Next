@@ -2,11 +2,16 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart'; // for kIsWeb
+import 'package:audio_service/audio_service.dart';
 import 'audio_player_ffi.dart';
 import 'metadata_cache.dart';
 import 'tray_service.dart';
+import 'background_audio.dart';
 
-void main() {
+late BackgroundAudioHandler _audioHandler;
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
   runApp(const TTPlayerApp());
 }
 
@@ -56,21 +61,33 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
   @override
   void initState() {
     super.initState();
+    _initServices();
+  }
+
+  Future<void> _initServices() async {
     _trayService = TrayService(
       onPlayPause: _togglePlay,
       onNext: () {},
       onPrev: () {},
       onQuit: () => exit(0),
     );
-    _trayService.init();
+    await _trayService.init();
 
     if (!kIsWeb) {
       try {
         _player = AudioPlayerFFI();
+        _audioHandler = await AudioService.init(
+          builder: () => BackgroundAudioHandler(_player!),
+          config: const AudioServiceConfig(
+            androidNotificationChannelId: 'com.omnitune.app.channel.audio',
+            androidNotificationChannelName: 'Music Playback',
+            androidNotificationOngoing: true,
+          ),
+        );
         _startUpdateTimer();
         _loadPlaylist();
       } catch (e) {
-        debugPrint('Failed to initialize AudioPlayerFFI: $e');
+        debugPrint('Failed to initialize Services: $e');
       }
     }
   }
@@ -137,10 +154,10 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
     if (_player == null) return;
     setState(() {
       if (_player!.isPlaying()) {
-        _player!.pause();
+        _audioHandler.pause();
         _isPlaying = false;
       } else {
-        _player!.play();
+        _audioHandler.play();
         _isPlaying = true;
       }
     });
@@ -148,7 +165,7 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
 
   void _stop() {
     if (_player == null) return;
-    _player!.stop();
+    _audioHandler.stop();
     setState(() {
       _isPlaying = false;
       _position = 0.0;
@@ -175,6 +192,7 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
     if (_player!.load(path)) {
       setState(() => _currentTitle = fileName);
       _loadLyrics(path);
+      _audioHandler.updateMetadata(fileName, 'Unknown', Duration(seconds: _player!.getDuration().toInt()));
       if (!_isPlaying) _togglePlay();
     }
   }
@@ -248,7 +266,7 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
                     activeColor: Colors.greenAccent,
                     onChanged: (v) {
                       setState(() => _position = v);
-                      _player?.seekTo(v);
+                      _audioHandler.seek(Duration(milliseconds: (v * 1000).toInt()));
                     },
                   ),
                 ),
