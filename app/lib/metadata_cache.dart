@@ -27,7 +27,7 @@ class MetadataCache {
       version: 1,
       onCreate: (db, version) {
         return db.execute(
-          'CREATE TABLE audio_files(path TEXT PRIMARY KEY, fileName TEXT, title TEXT, artist TEXT, album TEXT, duration REAL)',
+          'CREATE TABLE audio_files(path TEXT PRIMARY KEY, fileName TEXT, title TEXT, artist TEXT, album TEXT, duration REAL, albumArtPath TEXT)',
         );
       },
     );

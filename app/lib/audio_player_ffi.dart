@@ -38,6 +38,8 @@ typedef ScanResultGetPathNative = ffi.Pointer<Utf8> Function(ffi.Pointer<ffi.Voi
 typedef ScanResultGetPath = ffi.Pointer<Utf8> Function(ffi.Pointer<ffi.Void>, int);
 typedef ScanResultGetFileNameNative = ffi.Pointer<Utf8> Function(ffi.Pointer<ffi.Void>, ffi.Int32);
 typedef ScanResultGetFileName = ffi.Pointer<Utf8> Function(ffi.Pointer<ffi.Void>, int);
+typedef ScanResultGetAlbumArtPathNative = ffi.Pointer<Utf8> Function(ffi.Pointer<ffi.Void>, ffi.Int32);
+typedef ScanResultGetAlbumArtPath = ffi.Pointer<Utf8> Function(ffi.Pointer<ffi.Void>, int);
 typedef ScanResultDestroyNative = ffi.Void Function(ffi.Pointer<ffi.Void>);
 typedef ScanResultDestroy = void Function(ffi.Pointer<ffi.Void>);
 
@@ -56,7 +58,8 @@ typedef LyricsResultDestroy = void Function(ffi.Pointer<ffi.Void>);
 class AudioFileInfo {
   final String path;
   final String fileName;
-  AudioFileInfo(this.path, this.fileName);
+  final String albumArtPath;
+  AudioFileInfo(this.path, this.fileName, this.albumArtPath);
 }
 
 class LyricLine {
@@ -87,6 +90,7 @@ class AudioPlayerFFI {
   late ScanResultGetCount _getScanCount;
   late ScanResultGetPath _getScanPath;
   late ScanResultGetFileName _getScanFileName;
+  late ScanResultGetAlbumArtPath _getScanAlbumArtPath;
   late ScanResultDestroy _destroyScanResult;
 
   // Lyrics methods
@@ -115,6 +119,7 @@ class AudioPlayerFFI {
     _getScanCount = _lib.lookupFunction<ScanResultGetCountNative, ScanResultGetCount>('ScanResult_getCount');
     _getScanPath = _lib.lookupFunction<ScanResultGetPathNative, ScanResultGetPath>('ScanResult_getPath');
     _getScanFileName = _lib.lookupFunction<ScanResultGetFileNameNative, ScanResultGetFileName>('ScanResult_getFileName');
+    _getScanAlbumArtPath = _lib.lookupFunction<ScanResultGetAlbumArtPathNative, ScanResultGetAlbumArtPath>('ScanResult_getAlbumArtPath');
     _destroyScanResult = _lib.lookupFunction<ScanResultDestroyNative, ScanResultDestroy>('ScanResult_destroy');
 
     _parseLyrics = _lib.lookupFunction<LyricsParserParseNative, LyricsParserParse>('LyricsParser_parse');
@@ -165,9 +170,11 @@ class AudioPlayerFFI {
     final count = _getScanCount(resultPtr);
     final List<AudioFileInfo> files = [];
     for (var i = 0; i < count; i++) {
+      final artPathPtr = _getScanAlbumArtPath(resultPtr, i);
       files.add(AudioFileInfo(
         _getScanPath(resultPtr, i).toDartString(),
         _getScanFileName(resultPtr, i).toDartString(),
+        artPathPtr == ffi.nullptr ? "" : artPathPtr.toDartString(),
       ));
     }
     _destroyScanResult(resultPtr);

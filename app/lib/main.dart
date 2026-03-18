@@ -72,6 +72,7 @@ class _PlayerHomePageState extends State<PlayerHomePage> with WindowListener {
   String _currentLyric = "";
   final List<double> _eqGains = List.filled(10, 0.0);
   String _currentTitle = "No song loaded";
+  String _currentAlbumArt = "";
   bool _showPlaylist = true;
   bool _showEqualizer = false;
   late TrayService _trayService;
@@ -158,6 +159,7 @@ class _PlayerHomePageState extends State<PlayerHomePage> with WindowListener {
         'artist': 'Unknown',
         'album': 'Unknown',
         'duration': 0.0,
+        'albumArtPath': file.albumArtPath,
       });
     }
     _loadPlaylist();
@@ -214,10 +216,13 @@ class _PlayerHomePageState extends State<PlayerHomePage> with WindowListener {
     }
   }
 
-  void _loadFile(String path, String fileName) {
+  void _loadFile(String path, String fileName, String albumArtPath) {
     if (_player == null) return;
     if (_player!.load(path)) {
-      setState(() => _currentTitle = fileName);
+      setState(() {
+        _currentTitle = fileName;
+        _currentAlbumArt = albumArtPath;
+      });
       _loadLyrics(path);
       _audioHandler.updateMetadata(fileName, 'Unknown', Duration(seconds: _player!.getDuration().toInt()));
       if (!_isPlaying) _togglePlay();
@@ -243,6 +248,7 @@ class _PlayerHomePageState extends State<PlayerHomePage> with WindowListener {
               'artist': 'Unknown',
               'album': 'Unknown',
               'duration': 0.0,
+              'albumArtPath': '', // Would need to scan this specifically or just wait for next full scan
             });
           }
         }
@@ -296,26 +302,43 @@ class _PlayerHomePageState extends State<PlayerHomePage> with WindowListener {
                           width: double.infinity,
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(color: Colors.black, border: Border.all(color: Colors.greenAccent, width: 2)),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                          child: Row(
                             children: [
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text(_formatTime(_position), style: const TextStyle(color: Colors.greenAccent, fontSize: 40, fontFamily: 'Courier', fontWeight: FontWeight.bold)),
-                                  Column(
-                                    crossAxisAlignment: CrossAxisAlignment.end,
-                                    children: [
-                                      Text('KBPS: 320', style: TextStyle(color: Colors.greenAccent.withOpacity(0.7), fontSize: 10)),
-                                      Text('KHZ: 44.1', style: TextStyle(color: Colors.greenAccent.withOpacity(0.7), fontSize: 10)),
-                                    ],
-                                  )
-                                ],
+                              if (_currentAlbumArt.isNotEmpty)
+                                Container(
+                                  width: 80,
+                                  height: 80,
+                                  margin: const EdgeInsets.only(right: 10),
+                                  decoration: BoxDecoration(
+                                    border: Border.all(color: Colors.greenAccent),
+                                    image: DecorationImage(image: FileImage(File(_currentAlbumArt)), fit: BoxFit.cover),
+                                  ),
+                                )
+                              else
+                                Container(
+                                  width: 80,
+                                  height: 80,
+                                  margin: const EdgeInsets.only(right: 10),
+                                  decoration: BoxDecoration(border: Border.all(color: Colors.greenAccent.withOpacity(0.3))),
+                                  child: const Icon(Icons.music_note, color: Colors.greenAccent),
+                                ),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Text(_formatTime(_position), style: const TextStyle(color: Colors.greenAccent, fontSize: 30, fontFamily: 'Courier', fontWeight: FontWeight.bold)),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 5),
+                                    Text(_currentTitle, style: const TextStyle(color: Colors.greenAccent, fontSize: 12, overflow: TextOverflow.ellipsis)),
+                                    const SizedBox(height: 5),
+                                    Text(_currentLyric.isEmpty ? "OMNITUNE TT NEXT" : _currentLyric.toUpperCase(), style: const TextStyle(color: Colors.greenAccent, fontSize: 10, overflow: TextOverflow.ellipsis)),
+                                  ],
+                                ),
                               ),
-                              const SizedBox(height: 5),
-                              Text(_currentTitle, style: const TextStyle(color: Colors.greenAccent, fontSize: 12, overflow: TextOverflow.ellipsis)),
-                              const SizedBox(height: 5),
-                              Text(_currentLyric.isEmpty ? "OMNITUNE TT NEXT" : _currentLyric.toUpperCase(), style: const TextStyle(color: Colors.greenAccent, fontSize: 10, overflow: TextOverflow.ellipsis)),
                             ],
                           ),
                         ),
@@ -400,7 +423,7 @@ class _PlayerHomePageState extends State<PlayerHomePage> with WindowListener {
                                       dense: true,
                                       leading: Icon(Icons.music_note, size: 16, color: isSelected ? Colors.greenAccent : Colors.grey),
                                       title: Text(item['fileName'], style: TextStyle(color: isSelected ? Colors.greenAccent : Colors.white, fontSize: 12)),
-                                      onTap: () => _loadFile(item['path'], item['fileName']),
+                                      onTap: () => _loadFile(item['path'], item['fileName'], item['albumArtPath'] ?? ''),
                                     );
                                   },
                                 ),

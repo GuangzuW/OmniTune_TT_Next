@@ -4,6 +4,20 @@
 
 namespace fs = std::filesystem;
 
+std::string findAlbumArt(const fs::path& directory) {
+    const std::vector<std::string> artFiles = { "cover.jpg", "cover.png", "folder.jpg", "folder.png", "album.jpg" };
+    for (const auto& entry : fs::directory_iterator(directory)) {
+        if (entry.is_regular_file()) {
+            std::string name = entry.path().filename().string();
+            std::transform(name.begin(), name.end(), name.begin(), [](unsigned char c) { return std::tolower(c); });
+            if (std::find(artFiles.begin(), artFiles.end(), name) != artFiles.end()) {
+                return entry.path().string();
+            }
+        }
+    }
+    return "";
+}
+
 std::vector<AudioFileInfo> FileScanner::scanDirectory(const std::string& directoryPath) {
     std::vector<AudioFileInfo> audioFiles;
 
@@ -25,6 +39,7 @@ std::vector<AudioFileInfo> FileScanner::scanDirectory(const std::string& directo
                     info.path = entry.path().string();
                     info.fileName = entry.path().filename().string();
                     info.extension = ext;
+                    info.albumArtPath = findAlbumArt(entry.path().parent_path());
                     audioFiles.push_back(info);
                 }
             }

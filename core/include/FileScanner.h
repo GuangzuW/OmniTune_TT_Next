@@ -8,7 +8,7 @@ struct AudioFileInfo {
     std::string path;
     std::string fileName;
     std::string extension;
-    // Basic metadata can be added later
+    std::string albumArtPath;
 };
 
 class FileScanner {

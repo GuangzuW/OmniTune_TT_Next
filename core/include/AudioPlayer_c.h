@@ -27,6 +27,7 @@ ScanResultPtr FileScanner_scan(const char* dirPath);
 int ScanResult_getCount(ScanResultPtr result);
 const char* ScanResult_getPath(ScanResultPtr result, int index);
 const char* ScanResult_getFileName(ScanResultPtr result, int index);
+const char* ScanResult_getAlbumArtPath(ScanResultPtr result, int index);
 void ScanResult_destroy(ScanResultPtr result);
 
 // Lyrics Parser

@@ -42,6 +42,13 @@ const char* ScanResult_getFileName(ScanResultPtr result, int index) {
     auto& files = static_cast<ScanResult*>(result)->files;
     return (index >= 0 && index < static_cast<int>(files.size())) ? files[index].fileName.c_str() : nullptr;
 }
+
+const char* ScanResult_getAlbumArtPath(ScanResultPtr result, int index) {
+    if (!result) return nullptr;
+    auto& files = static_cast<ScanResult*>(result)->files;
+    return (index >= 0 && index < static_cast<int>(files.size())) ? files[index].albumArtPath.c_str() : nullptr;
+}
+
 void ScanResult_destroy(ScanResultPtr result) { if (result) delete static_cast<ScanResult*>(result); }
 
 // --- LyricsParser ---
