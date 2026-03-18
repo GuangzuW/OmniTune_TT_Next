@@ -95,3 +95,22 @@ bool AudioPlayer::isPlaying() {
     }
     return false;
 }
+
+#ifdef __EMSCRIPTEN__
+#include <emscripten/bind.h>
+
+using namespace emscripten;
+
+EMSCRIPTEN_BINDINGS(audio_player) {
+    class_<AudioPlayer>("AudioPlayer")
+        .constructor<>()
+        .function("load", &AudioPlayer::load)
+        .function("play", &AudioPlayer::play)
+        .function("pause", &AudioPlayer::pause)
+        .function("stop", &AudioPlayer::stop)
+        .function("seekTo", &AudioPlayer::seekTo)
+        .function("getPosition", &AudioPlayer::getPosition)
+        .function("getDuration", &AudioPlayer::getDuration)
+        .function("isPlaying", &AudioPlayer::isPlaying);
+}
+#endif

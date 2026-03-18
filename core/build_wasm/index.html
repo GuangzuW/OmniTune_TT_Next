@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>TTPlayer Wasm Test</title>
+</head>
+<body>
+    <h1>TTPlayer Wasm Test</h1>
+    <input type="file" id="audioFile" accept="audio/*">
+    <button id="playBtn" disabled>Play</button>
+    <button id="pauseBtn" disabled>Pause</button>
+    <button id="stopBtn" disabled>Stop</button>
+    <div id="status">Loading Wasm...</div>
+    <div id="info"></div>
+
+    <script src="TTPlayerCore.js"></script>
+    <script>
+        var player;
+        var TTPlayerCore = TTPlayerCore().then(module => {
+            console.log('Wasm loaded');
+            document.getElementById('status').innerText = 'Wasm Ready. Select an audio file.';
+            player = new module.AudioPlayer();
+            
+            document.getElementById('audioFile').onchange = function(e) {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                // For testing with miniaudio in Wasm, we might need to write the file to the virtual filesystem
+                const reader = new FileReader();
+                reader.onload = function() {
+                    const data = new Uint8Array(reader.result);
+                    const path = '/test_audio';
+                    module.FS.writeFile(path, data);
+                    
+                    if (player.load(path)) {
+                        document.getElementById('playBtn').disabled = false;
+                        document.getElementById('pauseBtn').disabled = false;
+                        document.getElementById('stopBtn').disabled = false;
+                        document.getElementById('status').innerText = 'Loaded: ' + file.name;
+                    } else {
+                        document.getElementById('status').innerText = 'Error loading file';
+                    }
+                };
+                reader.readAsArrayBuffer(file);
+            };
+
+            document.getElementById('playBtn').onclick = () => player.play();
+            document.getElementById('pauseBtn').onclick = () => player.pause();
+            document.getElementById('stopBtn').onclick = () => player.stop();
+
+            setInterval(() => {
+                if (player && player.isPlaying()) {
+                    document.getElementById('info').innerText = 
+                        'Position: ' + player.getPosition().toFixed(2) + ' / ' + player.getDuration().toFixed(2);
+                }
+            }, 500);
+        });
+    </script>
+</body>
+</html>
