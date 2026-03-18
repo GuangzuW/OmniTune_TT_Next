@@ -13,6 +13,9 @@ add_library(TTPlayerCore SHARED
     src/Equalizer.cpp
 )
 
+add_executable(test_core test/test_core.cpp)
+target_link_libraries(test_core TTPlayerCore)
+
 # Platform specific configurations
 if(WIN32)
     target_link_libraries(TTPlayerCore PUBLIC winmm)
