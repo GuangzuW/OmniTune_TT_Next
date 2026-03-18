@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart'; // for kIsWeb
 import 'audio_player_ffi.dart';
+import 'metadata_cache.dart';
 
 void main() {
   runApp(const TTPlayerApp());
@@ -38,6 +39,8 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
   double _position = 0.0;
   double _duration = 1.0;
   Timer? _timer;
+  final MetadataCache _cache = MetadataCache();
+  List<Map<String, dynamic>> _playlist = [];
 
   @override
   void initState() {
@@ -46,10 +49,43 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
       try {
         _player = AudioPlayerFFI();
         _startUpdateTimer();
+        _loadPlaylist();
       } catch (e) {
         debugPrint('Failed to initialize AudioPlayerFFI: $e');
       }
     }
+  }
+
+  Future<void> _loadPlaylist() async {
+    final files = await _cache.getFiles();
+    setState(() {
+      _playlist = files;
+    });
+  }
+
+  Future<void> _scanDirectory() async {
+    if (_player == null) return;
+    
+    // For demo, we scan the current directory or a test music folder
+    // In a real app, use a folder picker
+    final String scanPath = Directory.current.path; 
+    debugPrint('Scanning directory: $scanPath');
+    
+    final files = _player!.scanDirectory(scanPath);
+    debugPrint('Found ${files.length} files');
+
+    for (var file in files) {
+      await _cache.insertFile({
+        'path': file.path,
+        'fileName': file.fileName,
+        'title': file.fileName, // Placeholder
+        'artist': 'Unknown',
+        'album': 'Unknown',
+        'duration': 0.0,
+      });
+    }
+
+    _loadPlaylist();
   }
 
   void _startUpdateTimer() {
@@ -95,11 +131,11 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
     });
   }
 
-  void _loadFile() {
-    // For now, let's just use a hardcoded path or a mock
-    // In a real app, we'd use a file picker
-    debugPrint('Load file clicked');
-    // Example: _player?.load('/path/to/audio.mp3');
+  void _loadFile(String path) {
+    if (_player == null) return;
+    if (_player!.load(path)) {
+      _togglePlay();
+    }
   }
 
   @override
@@ -108,68 +144,74 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
       appBar: AppBar(
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         title: Text(widget.title),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _scanDirectory,
+          ),
+        ],
       ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            const Icon(Icons.music_note, size: 100, color: Colors.blue),
-            const SizedBox(height: 20),
-            Text(
-              _isPlaying ? 'Playing' : 'Paused',
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-            const SizedBox(height: 20),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Slider(
-                value: _position.clamp(0.0, _duration),
-                max: _duration,
-                onChanged: (value) {
-                  setState(() {
-                    _position = value;
-                  });
-                  _player?.seekTo(value);
-                },
+      body: Column(
+        children: [
+          Expanded(
+            flex: 1,
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: <Widget>[
+                  const Icon(Icons.music_note, size: 80, color: Colors.blue),
+                  const SizedBox(height: 10),
+                  Text(
+                    _isPlaying ? 'Playing' : 'Paused',
+                    style: Theme.of(context).textTheme.headlineSmall,
+                  ),
+                  Slider(
+                    value: _position.clamp(0.0, _duration),
+                    max: _duration,
+                    onChanged: (value) {
+                      setState(() {
+                        _position = value;
+                      });
+                      _player?.seekTo(value);
+                    },
+                  ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.stop),
+                        onPressed: _player != null ? _stop : null,
+                      ),
+                      IconButton(
+                        icon: Icon(_isPlaying ? Icons.pause : Icons.play_arrow),
+                        onPressed: _player != null ? _togglePlay : null,
+                        iconSize: 48,
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ),
-            Text(
-              '${_position.toStringAsFixed(1)} / ${_duration.toStringAsFixed(1)}s',
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-            const SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.stop),
-                  onPressed: _player != null ? _stop : null,
-                  iconSize: 48,
-                ),
-                IconButton(
-                  icon: Icon(_isPlaying ? Icons.pause : Icons.play_arrow),
-                  onPressed: _player != null ? _togglePlay : null,
-                  iconSize: 64,
-                ),
-                IconButton(
-                  icon: const Icon(Icons.file_open),
-                  onPressed: _loadFile,
-                  iconSize: 48,
-                ),
-              ],
-            ),
-            if (kIsWeb)
-              const Padding(
-                padding: EdgeInsets.all(20.0),
-                child: Text('Web support coming soon via Wasm bindings.'),
-              ),
-            if (_player == null && !kIsWeb)
-              const Padding(
-                padding: EdgeInsets.all(20.0),
-                child: Text('Error: Native library not found.', style: TextStyle(color: Colors.red)),
-              ),
-          ],
-        ),
+          ),
+          const Divider(),
+          Expanded(
+            flex: 2,
+            child: _playlist.isEmpty
+                ? const Center(child: Text('No music found. Click refresh to scan.'))
+                : ListView.builder(
+                    itemCount: _playlist.length,
+                    itemBuilder: (context, index) {
+                      final item = _playlist[index];
+                      return ListTile(
+                        leading: const Icon(Icons.audio_file),
+                        title: Text(item['fileName']),
+                        subtitle: Text(item['path']),
+                        onTap: () => _loadFile(item['path']),
+                      );
+                    },
+                  ),
+          ),
+        ],
       ),
     );
   }

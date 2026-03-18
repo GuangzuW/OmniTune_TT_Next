@@ -6,10 +6,11 @@ extern "C" {
 #endif
 
 typedef void* AudioPlayerPtr;
+typedef void* ScanResultPtr;
 
+// Audio Player
 AudioPlayerPtr AudioPlayer_create();
 void AudioPlayer_destroy(AudioPlayerPtr player);
-
 bool AudioPlayer_load(AudioPlayerPtr player, const char* filePath);
 void AudioPlayer_play(AudioPlayerPtr player);
 void AudioPlayer_pause(AudioPlayerPtr player);
@@ -18,6 +19,13 @@ void AudioPlayer_seekTo(AudioPlayerPtr player, float position);
 float AudioPlayer_getPosition(AudioPlayerPtr player);
 float AudioPlayer_getDuration(AudioPlayerPtr player);
 bool AudioPlayer_isPlaying(AudioPlayerPtr player);
+
+// File Scanner
+ScanResultPtr FileScanner_scan(const char* dirPath);
+int ScanResult_getCount(ScanResultPtr result);
+const char* ScanResult_getPath(ScanResultPtr result, int index);
+const char* ScanResult_getFileName(ScanResultPtr result, int index);
+void ScanResult_destroy(ScanResultPtr result);
 
 #ifdef __cplusplus
 }
