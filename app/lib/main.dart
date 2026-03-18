@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart'; // for kIsWeb
 import 'audio_player_ffi.dart';
@@ -41,6 +42,8 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
   Timer? _timer;
   final MetadataCache _cache = MetadataCache();
   List<Map<String, dynamic>> _playlist = [];
+  List<LyricLine> _lyrics = [];
+  String _currentLyric = "";
 
   @override
   void initState() {
@@ -63,11 +66,35 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
     });
   }
 
+  void _updateCurrentLyric() {
+    if (_lyrics.isEmpty) {
+      if (_currentLyric != "") {
+        setState(() {
+          _currentLyric = "";
+        });
+      }
+      return;
+    }
+
+    String found = "";
+    for (var i = 0; i < _lyrics.length; i++) {
+      if (_position >= _lyrics[i].timestamp) {
+        found = _lyrics[i].text;
+      } else {
+        break;
+      }
+    }
+    
+    if (_currentLyric != found) {
+      setState(() {
+        _currentLyric = found;
+      });
+    }
+  }
+
   Future<void> _scanDirectory() async {
     if (_player == null) return;
     
-    // For demo, we scan the current directory or a test music folder
-    // In a real app, use a folder picker
     final String scanPath = Directory.current.path; 
     debugPrint('Scanning directory: $scanPath');
     
@@ -78,7 +105,7 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
       await _cache.insertFile({
         'path': file.path,
         'fileName': file.fileName,
-        'title': file.fileName, // Placeholder
+        'title': file.fileName, 
         'artist': 'Unknown',
         'album': 'Unknown',
         'duration': 0.0,
@@ -89,7 +116,7 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
   }
 
   void _startUpdateTimer() {
-    _timer = Timer.periodic(const Duration(milliseconds: 500), (timer) {
+    _timer = Timer.periodic(const Duration(milliseconds: 100), (timer) {
       if (_player != null && _player!.isPlaying()) {
         setState(() {
           _position = _player!.getPosition();
@@ -97,6 +124,7 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
           if (_duration <= 0) _duration = 1.0;
           if (_position > _duration) _position = _duration;
         });
+        _updateCurrentLyric();
       }
     });
   }
@@ -128,13 +156,35 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
     setState(() {
       _isPlaying = false;
       _position = 0.0;
+      _currentLyric = "";
     });
+  }
+
+  Future<void> _loadLyrics(String musicPath) async {
+    final lrcPath = musicPath.replaceAll(RegExp(r'\.(mp3|flac|ape|wav|ogg)$'), '.lrc');
+    final lrcFile = File(lrcPath);
+    if (await lrcFile.exists()) {
+      final content = await lrcFile.readAsString();
+      setState(() {
+        _lyrics = _player!.parseLyrics(content);
+      });
+      debugPrint('Loaded ${_lyrics.length} lyric lines');
+    } else {
+      setState(() {
+        _lyrics = [];
+        _currentLyric = "";
+      });
+      debugPrint('No lyrics found at $lrcPath');
+    }
   }
 
   void _loadFile(String path) {
     if (_player == null) return;
     if (_player!.load(path)) {
-      _togglePlay();
+      _loadLyrics(path);
+      if (!_isPlaying) {
+        _togglePlay();
+      }
     }
   }
 
@@ -155,19 +205,27 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
         children: [
           Expanded(
             flex: 1,
-            child: Center(
+            child: Container(
+              color: Colors.black87,
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: <Widget>[
-                  const Icon(Icons.music_note, size: 80, color: Colors.blue),
-                  const SizedBox(height: 10),
                   Text(
-                    _isPlaying ? 'Playing' : 'Paused',
-                    style: Theme.of(context).textTheme.headlineSmall,
+                    _currentLyric.isEmpty ? "OmniTune TT Next" : _currentLyric,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Colors.greenAccent,
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
+                  const SizedBox(height: 20),
                   Slider(
                     value: _position.clamp(0.0, _duration),
                     max: _duration,
+                    activeColor: Colors.greenAccent,
                     onChanged: (value) {
                       setState(() {
                         _position = value;
@@ -179,11 +237,11 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       IconButton(
-                        icon: const Icon(Icons.stop),
+                        icon: const Icon(Icons.stop, color: Colors.white),
                         onPressed: _player != null ? _stop : null,
                       ),
                       IconButton(
-                        icon: Icon(_isPlaying ? Icons.pause : Icons.play_arrow),
+                        icon: Icon(_isPlaying ? Icons.pause : Icons.play_arrow, color: Colors.white),
                         onPressed: _player != null ? _togglePlay : null,
                         iconSize: 48,
                       ),
@@ -193,7 +251,7 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
               ),
             ),
           ),
-          const Divider(),
+          const Divider(height: 1),
           Expanded(
             flex: 2,
             child: _playlist.isEmpty

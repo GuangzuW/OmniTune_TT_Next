@@ -7,6 +7,7 @@ extern "C" {
 
 typedef void* AudioPlayerPtr;
 typedef void* ScanResultPtr;
+typedef void* LyricsResultPtr;
 
 // Audio Player
 AudioPlayerPtr AudioPlayer_create();
@@ -26,6 +27,13 @@ int ScanResult_getCount(ScanResultPtr result);
 const char* ScanResult_getPath(ScanResultPtr result, int index);
 const char* ScanResult_getFileName(ScanResultPtr result, int index);
 void ScanResult_destroy(ScanResultPtr result);
+
+// Lyrics Parser
+LyricsResultPtr LyricsParser_parse(const char* lrcContent);
+int LyricsResult_getCount(LyricsResultPtr result);
+float LyricsResult_getTimestamp(LyricsResultPtr result, int index);
+const char* LyricsResult_getText(LyricsResultPtr result, int index);
+void LyricsResult_destroy(LyricsResultPtr result);
 
 #ifdef __cplusplus
 }

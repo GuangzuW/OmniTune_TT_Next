@@ -9,6 +9,7 @@ add_library(TTPlayerCore SHARED
     src/AudioPlayer.cpp 
     src/AudioPlayer_c.cpp
     src/FileScanner.cpp
+    src/LyricsParser.cpp
 )
 
 # Platform specific configurations
