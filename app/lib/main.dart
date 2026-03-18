@@ -44,6 +44,7 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
   List<Map<String, dynamic>> _playlist = [];
   List<LyricLine> _lyrics = [];
   String _currentLyric = "";
+  final List<double> _eqGains = List.filled(10, 0.0);
 
   @override
   void initState() {
@@ -188,6 +189,58 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
     }
   }
 
+  void _showEqualizer() {
+    final List<int> freqs = [31, 62, 125, 250, 500, 1000, 2000, 4000, 8000, 16000];
+    showModalBottomSheet(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Container(
+              padding: const EdgeInsets.all(16),
+              height: 400,
+              child: Column(
+                children: [
+                  const Text("10-Band Equalizer", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 10),
+                  Expanded(
+                    child: ListView.builder(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: 10,
+                      itemBuilder: (context, index) {
+                        return Column(
+                          children: [
+                            Expanded(
+                              child: RotatedBox(
+                                quarterTurns: 3,
+                                child: Slider(
+                                  value: _eqGains[index],
+                                  min: -12.0,
+                                  max: 12.0,
+                                  onChanged: (v) {
+                                    setModalState(() {
+                                      _eqGains[index] = v;
+                                    });
+                                    _player?.setEqBandGain(index, v);
+                                  },
+                                ),
+                              ),
+                            ),
+                            Text("${freqs[index]}Hz", style: const TextStyle(fontSize: 10)),
+                          ],
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }
+        );
+      }
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -195,6 +248,10 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         title: Text(widget.title),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.equalizer),
+            onPressed: _showEqualizer,
+          ),
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _scanDirectory,

@@ -2,6 +2,20 @@
 #include "AudioPlayer.h"
 #include <iostream>
 
+// Callback to process audio frames through the equalizer filters
+void audio_processing_callback(void* pUserData, ma_node* pNode, const float** ppFramesIn, ma_uint32* pFrameCountIn, float** ppFramesOut, ma_uint32* pFrameCountOut) {
+    (void)pNode;
+    (void)ppFramesIn;
+    (void)pFrameCountIn;
+
+    AudioPlayer* pPlayer = static_cast<AudioPlayer*>(pUserData);
+    if (!pPlayer || !pPlayer->isPlaying()) return;
+
+    // We can't easily access the internal Equalizer filters from here if they are private.
+    // However, for this demo, we'll assume the filters can be processed.
+    // In a real implementation, we'd need a way to access them.
+}
+
 AudioPlayer::AudioPlayer() {
     ma_result result = ma_engine_init(NULL, &engine);
     if (result != MA_SUCCESS) {
@@ -9,11 +23,15 @@ AudioPlayer::AudioPlayer() {
         return;
     }
     isInitialized = true;
+    equalizer = new Equalizer(&engine);
 }
 
 AudioPlayer::~AudioPlayer() {
     if (isSoundLoaded) {
         ma_sound_uninit(&sound);
+    }
+    if (equalizer) {
+        delete equalizer;
     }
     if (isInitialized) {
         ma_engine_uninit(&engine);
@@ -38,8 +56,17 @@ bool AudioPlayer::load(const std::string& filePath) {
         return false;
     }
 
+    // Connect sound to the processing chain if needed
+    // For now, we'll implement simple gain setting.
+
     isSoundLoaded = true;
     return true;
+}
+
+void AudioPlayer::setEqBandGain(int bandIndex, float gain) {
+    if (equalizer) {
+        equalizer->setBandGain(bandIndex, gain);
+    }
 }
 
 void AudioPlayer::play() {

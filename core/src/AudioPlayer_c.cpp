@@ -15,9 +15,16 @@ void AudioPlayer_stop(AudioPlayerPtr player) { static_cast<AudioPlayer*>(player)
 void AudioPlayer_seekTo(AudioPlayerPtr player, float position) { static_cast<AudioPlayer*>(player)->seekTo(position); }
 float AudioPlayer_getPosition(AudioPlayerPtr player) { return static_cast<AudioPlayer*>(player)->getPosition(); }
 float AudioPlayer_getDuration(AudioPlayerPtr player) { return static_cast<AudioPlayer*>(player)->getDuration(); }
-bool AudioPlayer_isPlaying(AudioPlayerPtr player) { return static_cast<AudioPlayer*>(player)->isPlaying(); }
+bool AudioPlayer_isPlaying(AudioPlayerPtr player) {
+    return static_cast<AudioPlayer*>(player)->isPlaying();
+}
+
+void AudioPlayer_setEqBandGain(AudioPlayerPtr player, int bandIndex, float gain) {
+    static_cast<AudioPlayer*>(player)->setEqBandGain(bandIndex, gain);
+}
 
 // --- FileScanner ---
+
 struct ScanResult { std::vector<AudioFileInfo> files; };
 ScanResultPtr FileScanner_scan(const char* dirPath) {
     ScanResult* result = new ScanResult();

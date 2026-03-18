@@ -3,6 +3,7 @@
 
 #include <string>
 #include "miniaudio.h"
+#include "Equalizer.h"
 
 class AudioPlayer {
 public:
@@ -18,11 +19,16 @@ public:
     float getDuration();
     bool isPlaying();
 
+    void setEqBandGain(int bandIndex, float gain);
+
 private:
     ma_engine engine;
     ma_sound sound;
     bool isInitialized = false;
     bool isSoundLoaded = false;
+    Equalizer* equalizer = nullptr;
+
+    // Optional: for manual processing if needed, but miniaudio often manages nodes.
 };
 
 #endif // AUDIO_PLAYER_H

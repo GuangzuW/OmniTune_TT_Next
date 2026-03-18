@@ -26,6 +26,8 @@ typedef AudioPlayerGetDurationNative = ffi.Float Function(ffi.Pointer<ffi.Void>)
 typedef AudioPlayerGetDuration = double Function(ffi.Pointer<ffi.Void>);
 typedef AudioPlayerIsPlayingNative = ffi.Bool Function(ffi.Pointer<ffi.Void>);
 typedef AudioPlayerIsPlaying = bool Function(ffi.Pointer<ffi.Void>);
+typedef AudioPlayerSetEqBandGainNative = ffi.Void Function(ffi.Pointer<ffi.Void>, ffi.Int32, ffi.Float);
+typedef AudioPlayerSetEqBandGain = void Function(ffi.Pointer<ffi.Void>, int, double);
 
 // Scanner
 typedef FileScannerScanNative = ffi.Pointer<ffi.Void> Function(ffi.Pointer<Utf8>);
@@ -78,6 +80,7 @@ class AudioPlayerFFI {
   late AudioPlayerGetPosition _getPosition;
   late AudioPlayerGetDuration _getDuration;
   late AudioPlayerIsPlaying _isPlaying;
+  late AudioPlayerSetEqBandGain _setEqBandGain;
 
   // Scanner methods
   late FileScannerScan _scan;
@@ -106,6 +109,7 @@ class AudioPlayerFFI {
     _getPosition = _lib.lookupFunction<AudioPlayerGetPositionNative, AudioPlayerGetPosition>('AudioPlayer_getPosition');
     _getDuration = _lib.lookupFunction<AudioPlayerGetDurationNative, AudioPlayerGetDuration>('AudioPlayer_getDuration');
     _isPlaying = _lib.lookupFunction<AudioPlayerIsPlayingNative, AudioPlayerIsPlaying>('AudioPlayer_isPlaying');
+    _setEqBandGain = _lib.lookupFunction<AudioPlayerSetEqBandGainNative, AudioPlayerSetEqBandGain>('AudioPlayer_setEqBandGain');
 
     _scan = _lib.lookupFunction<FileScannerScanNative, FileScannerScan>('FileScanner_scan');
     _getScanCount = _lib.lookupFunction<ScanResultGetCountNative, ScanResultGetCount>('ScanResult_getCount');
@@ -151,6 +155,7 @@ class AudioPlayerFFI {
   double getPosition() => _getPosition(_player);
   double getDuration() => _getDuration(_player);
   bool isPlaying() => _isPlaying(_player);
+  void setEqBandGain(int bandIndex, double gain) => _setEqBandGain(_player, bandIndex, gain);
 
   List<AudioFileInfo> scanDirectory(String dirPath) {
     final pathPtr = dirPath.toNativeUtf8();

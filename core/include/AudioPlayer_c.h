@@ -20,6 +20,7 @@ void AudioPlayer_seekTo(AudioPlayerPtr player, float position);
 float AudioPlayer_getPosition(AudioPlayerPtr player);
 float AudioPlayer_getDuration(AudioPlayerPtr player);
 bool AudioPlayer_isPlaying(AudioPlayerPtr player);
+void AudioPlayer_setEqBandGain(AudioPlayerPtr player, int bandIndex, float gain);
 
 // File Scanner
 ScanResultPtr FileScanner_scan(const char* dirPath);
