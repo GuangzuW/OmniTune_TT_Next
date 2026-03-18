@@ -280,66 +280,71 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
                     IconButton(icon: const Icon(Icons.skip_next, color: Colors.white), onPressed: () {}),
                   ],
                 ),
-                if (_showEqualizer) ...[
-                  const Divider(color: Colors.greenAccent),
-                  SizedBox(
-                    height: 100,
-                    child: ListView.builder(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: 10,
-                      itemBuilder: (context, index) {
-                        final freqs = [31, 62, 125, 250, 500, 1000, 2000, 4000, 8000, 16000];
-                        return Column(
-                          children: [
-                            Expanded(
-                              child: RotatedBox(quarterTurns: 3, child: Slider(
-                                value: _eqGains[index], min: -12.0, max: 12.0, activeColor: Colors.greenAccent,
-                                onChanged: (v) {
-                                  setState(() => _eqGains[index] = v);
-                                  _player?.setEqBandGain(index, v);
-                                },
-                              )),
-                            ),
-                            Text("${freqs[index] < 1000 ? freqs[index] : '${freqs[index]~/1000}k'}", style: const TextStyle(fontSize: 8, color: Colors.greenAccent)),
-                          ],
-                        );
-                      },
-                    ),
-                  ),
-                ]
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 300),
+                  height: _showEqualizer ? 100 : 0,
+                  curve: Curves.easeInOut,
+                  child: _showEqualizer ? Column(
+                    children: [
+                      const Divider(color: Colors.greenAccent),
+                      Expanded(
+                        child: ListView.builder(
+                          scrollDirection: Axis.horizontal,
+                          itemCount: 10,
+                          itemBuilder: (context, index) {
+                            final freqs = [31, 62, 125, 250, 500, 1000, 2000, 4000, 8000, 16000];
+                            return Column(
+                              children: [
+                                Expanded(
+                                  child: RotatedBox(quarterTurns: 3, child: Slider(
+                                    value: _eqGains[index], min: -12.0, max: 12.0, activeColor: Colors.greenAccent,
+                                    onChanged: (v) {
+                                      setState(() => _eqGains[index] = v);
+                                      _player?.setEqBandGain(index, v);
+                                    },
+                                  )),
+                                ),
+                                Text("${freqs[index] < 1000 ? freqs[index] : '${freqs[index]~/1000}k'}", style: const TextStyle(fontSize: 8, color: Colors.greenAccent)),
+                              ],
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ) : null,
+                )
               ],
             ),
           ),
           // Detachable Playlist Panel
-          if (_showPlaylist)
-            Expanded(
-              child: Container(
-                margin: const EdgeInsets.only(left: 8),
-                decoration: BoxDecoration(color: Colors.black, border: Border.all(color: Colors.grey[800]!)),
-                child: Column(
-                  children: [
-                    Container(padding: const EdgeInsets.all(8), color: Colors.grey[900], width: double.infinity, child: const Text('PLAYLIST', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold))),
-                    Expanded(
-                      child: _playlist.isEmpty
-                          ? const Center(child: Text('Playlist empty', style: TextStyle(color: Colors.grey)))
-                          : ListView.builder(
-                              itemCount: _playlist.length,
-                              itemBuilder: (context, index) {
-                                final item = _playlist[index];
-                                final bool isSelected = _currentTitle == item['fileName'];
-                                return ListTile(
-                                  dense: true,
-                                  leading: Icon(Icons.music_note, size: 16, color: isSelected ? Colors.greenAccent : Colors.grey),
-                                  title: Text(item['fileName'], style: TextStyle(color: isSelected ? Colors.greenAccent : Colors.white, fontSize: 12)),
-                                  onTap: () => _loadFile(item['path'], item['fileName']),
-                                );
-                              },
-                            ),
-                    ),
-                  ],
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 300),
+            width: _showPlaylist ? 400 : 0,
+            margin: EdgeInsets.only(left: _showPlaylist ? 8 : 0),
+            decoration: BoxDecoration(color: Colors.black, border: Border.all(color: _showPlaylist ? Colors.grey[800]! : Colors.transparent)),
+            child: _showPlaylist ? Column(
+              children: [
+                Container(padding: const EdgeInsets.all(8), color: Colors.grey[900], width: double.infinity, child: const Text('PLAYLIST', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold))),
+                Expanded(
+                  child: _playlist.isEmpty
+                      ? const Center(child: Text('Playlist empty', style: TextStyle(color: Colors.grey)))
+                      : ListView.builder(
+                          itemCount: _playlist.length,
+                          itemBuilder: (context, index) {
+                            final item = _playlist[index];
+                            final bool isSelected = _currentTitle == item['fileName'];
+                            return ListTile(
+                              dense: true,
+                              leading: Icon(Icons.music_note, size: 16, color: isSelected ? Colors.greenAccent : Colors.grey),
+                              title: Text(item['fileName'], style: TextStyle(color: isSelected ? Colors.greenAccent : Colors.white, fontSize: 12)),
+                              onTap: () => _loadFile(item['path'], item['fileName']),
+                            );
+                          },
+                        ),
                 ),
-              ),
-            ),
+              ],
+            ) : null,
+          ),
         ],
       ),
     );
