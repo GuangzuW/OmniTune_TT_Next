@@ -5,7 +5,10 @@ set(CMAKE_CXX_STANDARD 17)
 
 include_directories(include)
 
-add_library(TTPlayerCore SHARED src/AudioPlayer.cpp)
+add_library(TTPlayerCore SHARED 
+    src/AudioPlayer.cpp 
+    src/AudioPlayer_c.cpp
+)
 
 # Platform specific configurations
 if(WIN32)
