@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart'; // for kIsWeb
 import 'audio_player_ffi.dart';
 import 'metadata_cache.dart';
+import 'tray_service.dart';
 
 void main() {
   runApp(const TTPlayerApp());
@@ -50,10 +51,19 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
   String _currentTitle = "No song loaded";
   bool _showPlaylist = true;
   bool _showEqualizer = false;
+  late TrayService _trayService;
 
   @override
   void initState() {
     super.initState();
+    _trayService = TrayService(
+      onPlayPause: _togglePlay,
+      onNext: () {},
+      onPrev: () {},
+      onQuit: () => exit(0),
+    );
+    _trayService.init();
+
     if (!kIsWeb) {
       try {
         _player = AudioPlayerFFI();
