@@ -29,10 +29,13 @@ func main() {
 
 		tracks, err := audiusClient.SearchTracks(query)
 		if err != nil {
+			log.Printf("Search error: %v", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
+		// Map to internal model if needed, but for now we return Tracks
+		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(tracks)
 	}).Methods("GET")
 
@@ -42,6 +45,8 @@ func main() {
 		
 		url := audiusClient.GetStreamURL(id)
 		
+		// For a real proxy, we would pipe the response, but redirecting 
+		// handles most cases if CORS is configured correctly on Audius side.
 		http.Redirect(w, r, url, http.StatusFound)
 	}).Methods("GET")
 
