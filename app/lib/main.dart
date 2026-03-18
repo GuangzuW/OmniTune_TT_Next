@@ -75,6 +75,8 @@ class _PlayerHomePageState extends State<PlayerHomePage> with WindowListener {
   String _currentAlbumArt = "";
   bool _showPlaylist = true;
   bool _showEqualizer = false;
+  bool _showFloatingLyrics = false;
+  Offset _lyricsOffset = const Offset(50, 50);
   late TrayService _trayService;
 
   @override
@@ -248,7 +250,7 @@ class _PlayerHomePageState extends State<PlayerHomePage> with WindowListener {
               'artist': 'Unknown',
               'album': 'Unknown',
               'duration': 0.0,
-              'albumArtPath': '', // Would need to scan this specifically or just wait for next full scan
+              'albumArtPath': '', 
             });
           }
         }
@@ -274,166 +276,195 @@ class _PlayerHomePageState extends State<PlayerHomePage> with WindowListener {
             ),
           ),
         ),
-        body: Column(
+        body: Stack(
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
+            Column(
               children: [
-                IconButton(icon: Icon(_showEqualizer ? Icons.equalizer : Icons.equalizer_outlined), onPressed: () => setState(() => _showEqualizer = !_showEqualizer)),
-                IconButton(icon: Icon(_showPlaylist ? Icons.list : Icons.list_outlined), onPressed: () => setState(() => _showPlaylist = !_showPlaylist)),
-                IconButton(icon: const Icon(Icons.refresh), onPressed: _scanDirectory),
-              ],
-            ),
-            Expanded(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Main Player Window
-                  Container(
-                    width: 320,
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(border: Border.all(color: Colors.grey[800]!), color: Colors.black),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        // LCD Display
-                        Container(
-                          height: 120,
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(color: Colors.black, border: Border.all(color: Colors.greenAccent, width: 2)),
-                          child: Row(
-                            children: [
-                              if (_currentAlbumArt.isNotEmpty)
-                                Container(
-                                  width: 80,
-                                  height: 80,
-                                  margin: const EdgeInsets.only(right: 10),
-                                  decoration: BoxDecoration(
-                                    border: Border.all(color: Colors.greenAccent),
-                                    image: DecorationImage(image: FileImage(File(_currentAlbumArt)), fit: BoxFit.cover),
-                                  ),
-                                )
-                              else
-                                Container(
-                                  width: 80,
-                                  height: 80,
-                                  margin: const EdgeInsets.only(right: 10),
-                                  decoration: BoxDecoration(border: Border.all(color: Colors.greenAccent.withOpacity(0.3))),
-                                  child: const Icon(Icons.music_note, color: Colors.greenAccent),
-                                ),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    IconButton(icon: Icon(_showFloatingLyrics ? Icons.text_snippet : Icons.text_snippet_outlined, color: Colors.greenAccent), onPressed: () => setState(() => _showFloatingLyrics = !_showFloatingLyrics)),
+                    IconButton(icon: Icon(_showEqualizer ? Icons.equalizer : Icons.equalizer_outlined), onPressed: () => setState(() => _showEqualizer = !_showEqualizer)),
+                    IconButton(icon: Icon(_showPlaylist ? Icons.list : Icons.list_outlined), onPressed: () => setState(() => _showPlaylist = !_showPlaylist)),
+                    IconButton(icon: const Icon(Icons.refresh), onPressed: _scanDirectory),
+                  ],
+                ),
+                Expanded(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Main Player Window
+                      Container(
+                        width: 320,
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(border: Border.all(color: Colors.grey[800]!), color: Colors.black),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // LCD Display
+                            Container(
+                              height: 120,
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(color: Colors.black, border: Border.all(color: Colors.greenAccent, width: 2)),
+                              child: Row(
+                                children: [
+                                  if (_currentAlbumArt.isNotEmpty)
+                                    Container(
+                                      width: 80,
+                                      height: 80,
+                                      margin: const EdgeInsets.only(right: 10),
+                                      decoration: BoxDecoration(
+                                        border: Border.all(color: Colors.greenAccent),
+                                        image: DecorationImage(image: FileImage(File(_currentAlbumArt)), fit: BoxFit.cover),
+                                      ),
+                                    )
+                                  else
+                                    Container(
+                                      width: 80,
+                                      height: 80,
+                                      margin: const EdgeInsets.only(right: 10),
+                                      decoration: BoxDecoration(border: Border.all(color: Colors.greenAccent.withOpacity(0.3))),
+                                      child: const Icon(Icons.music_note, color: Colors.greenAccent),
+                                    ),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        Text(_formatTime(_position), style: const TextStyle(color: Colors.greenAccent, fontSize: 30, fontFamily: 'Courier', fontWeight: FontWeight.bold)),
+                                        Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            Text(_formatTime(_position), style: const TextStyle(color: Colors.greenAccent, fontSize: 30, fontFamily: 'Courier', fontWeight: FontWeight.bold)),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 5),
+                                        Text(_currentTitle, style: const TextStyle(color: Colors.greenAccent, fontSize: 12, overflow: TextOverflow.ellipsis)),
+                                        const SizedBox(height: 5),
+                                        Text(_currentLyric.isEmpty ? "OMNITUNE TT NEXT" : _currentLyric.toUpperCase(), style: const TextStyle(color: Colors.greenAccent, fontSize: 10, overflow: TextOverflow.ellipsis)),
                                       ],
                                     ),
-                                    const SizedBox(height: 5),
-                                    Text(_currentTitle, style: const TextStyle(color: Colors.greenAccent, fontSize: 12, overflow: TextOverflow.ellipsis)),
-                                    const SizedBox(height: 5),
-                                    Text(_currentLyric.isEmpty ? "OMNITUNE TT NEXT" : _currentLyric.toUpperCase(), style: const TextStyle(color: Colors.greenAccent, fontSize: 10, overflow: TextOverflow.ellipsis)),
-                                  ],
-                                ),
+                                  ),
+                                ],
                               ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        // Visualization / Progress
-                        SliderTheme(
-                          data: SliderTheme.of(context).copyWith(trackHeight: 2, thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6)),
-                          child: Slider(
-                            value: _position.clamp(0.0, _duration),
-                            max: _duration,
-                            activeColor: Colors.greenAccent,
-                            onChanged: (v) {
-                              setState(() => _position = v);
-                              _audioHandler.seek(Duration(milliseconds: (v * 1000).toInt()));
-                            },
-                          ),
-                        ),
-                        // Controls
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            IconButton(icon: const Icon(Icons.skip_previous, color: Colors.white), onPressed: () {}),
-                            IconButton(icon: Icon(_isPlaying ? Icons.pause_circle_filled : Icons.play_circle_filled, color: Colors.greenAccent), onPressed: _togglePlay, iconSize: 48),
-                            IconButton(icon: const Icon(Icons.stop, color: Colors.white), onPressed: _stop),
-                            IconButton(icon: const Icon(Icons.skip_next, color: Colors.white), onPressed: () {}),
+                            ),
+                            const SizedBox(height: 10),
+                            // Visualization / Progress
+                            SliderTheme(
+                              data: SliderTheme.of(context).copyWith(trackHeight: 2, thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6)),
+                              child: Slider(
+                                value: _position.clamp(0.0, _duration),
+                                max: _duration,
+                                activeColor: Colors.greenAccent,
+                                onChanged: (v) {
+                                  setState(() => _position = v);
+                                  _audioHandler.seek(Duration(milliseconds: (v * 1000).toInt()));
+                                },
+                              ),
+                            ),
+                            // Controls
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                IconButton(icon: const Icon(Icons.skip_previous, color: Colors.white), onPressed: () {}),
+                                IconButton(icon: Icon(_isPlaying ? Icons.pause_circle_filled : Icons.play_circle_filled, color: Colors.greenAccent), onPressed: _togglePlay, iconSize: 48),
+                                IconButton(icon: const Icon(Icons.stop, color: Colors.white), onPressed: _stop),
+                                IconButton(icon: const Icon(Icons.skip_next, color: Colors.white), onPressed: () {}),
+                              ],
+                            ),
+                            AnimatedContainer(
+                              duration: const Duration(milliseconds: 300),
+                              height: _showEqualizer ? 100 : 0,
+                              curve: Curves.easeInOut,
+                              child: _showEqualizer ? Column(
+                                children: [
+                                  const Divider(color: Colors.greenAccent),
+                                  Expanded(
+                                    child: ListView.builder(
+                                      scrollDirection: Axis.horizontal,
+                                      itemCount: 10,
+                                      itemBuilder: (context, index) {
+                                        final freqs = [31, 62, 125, 250, 500, 1000, 2000, 4000, 8000, 16000];
+                                        return Column(
+                                          children: [
+                                            Expanded(
+                                              child: RotatedBox(quarterTurns: 3, child: Slider(
+                                                value: _eqGains[index], min: -12.0, max: 12.0, activeColor: Colors.greenAccent,
+                                                onChanged: (v) {
+                                                  setState(() => _eqGains[index] = v);
+                                                  _player?.setEqBandGain(index, v);
+                                                },
+                                              )),
+                                            ),
+                                            Text("${freqs[index] < 1000 ? freqs[index] : '${freqs[index]~/1000}k'}", style: const TextStyle(fontSize: 8, color: Colors.greenAccent)),
+                                          ],
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                ],
+                              ) : null,
+                            )
                           ],
                         ),
-                        AnimatedContainer(
-                          duration: const Duration(milliseconds: 300),
-                          height: _showEqualizer ? 100 : 0,
-                          curve: Curves.easeInOut,
-                          child: _showEqualizer ? Column(
-                            children: [
-                              const Divider(color: Colors.greenAccent),
-                              Expanded(
-                                child: ListView.builder(
-                                  scrollDirection: Axis.horizontal,
-                                  itemCount: 10,
-                                  itemBuilder: (context, index) {
-                                    final freqs = [31, 62, 125, 250, 500, 1000, 2000, 4000, 8000, 16000];
-                                    return Column(
-                                      children: [
-                                        Expanded(
-                                          child: RotatedBox(quarterTurns: 3, child: Slider(
-                                            value: _eqGains[index], min: -12.0, max: 12.0, activeColor: Colors.greenAccent,
-                                            onChanged: (v) {
-                                              setState(() => _eqGains[index] = v);
-                                              _player?.setEqBandGain(index, v);
-                                            },
-                                          )),
-                                        ),
-                                        Text("${freqs[index] < 1000 ? freqs[index] : '${freqs[index]~/1000}k'}", style: const TextStyle(fontSize: 8, color: Colors.greenAccent)),
-                                      ],
-                                    );
-                                  },
-                                ),
-                              ),
-                            ],
-                          ) : null,
-                        )
-                      ],
+                      ),
+                      // Detachable Playlist Panel
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 300),
+                        width: _showPlaylist ? 400 : 0,
+                        margin: EdgeInsets.only(left: _showPlaylist ? 8 : 0),
+                        decoration: BoxDecoration(color: Colors.black, border: Border.all(color: _showPlaylist ? Colors.grey[800]! : Colors.transparent)),
+                        child: _showPlaylist ? Column(
+                          children: [
+                            Container(padding: const EdgeInsets.all(8), color: Colors.grey[900], width: double.infinity, child: const Text('PLAYLIST', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold))),
+                            Expanded(
+                              child: _playlist.isEmpty
+                                  ? const Center(child: Text('Playlist empty', style: TextStyle(color: Colors.grey)))
+                                  : ListView.builder(
+                                      itemCount: _playlist.length,
+                                      itemBuilder: (context, index) {
+                                        final item = _playlist[index];
+                                        final bool isSelected = _currentTitle == item['fileName'];
+                                        return ListTile(
+                                          dense: true,
+                                          leading: Icon(Icons.music_note, size: 16, color: isSelected ? Colors.greenAccent : Colors.grey),
+                                          title: Text(item['fileName'], style: TextStyle(color: isSelected ? Colors.greenAccent : Colors.white, fontSize: 12)),
+                                          onTap: () => _loadFile(item['path'], item['fileName'], item['albumArtPath'] ?? ''),
+                                        );
+                                      },
+                                    ),
+                            ),
+                          ],
+                        ) : null,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            if (_showFloatingLyrics)
+              Positioned(
+                left: _lyricsOffset.dx,
+                top: _lyricsOffset.dy,
+                child: GestureDetector(
+                  onPanUpdate: (details) {
+                    setState(() {
+                      _lyricsOffset += details.delta;
+                    });
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.7),
+                      borderRadius: BorderRadius.circular(5),
+                      border: Border.all(color: Colors.greenAccent.withOpacity(0.5)),
+                    ),
+                    child: Text(
+                      _currentLyric.isEmpty ? "OmniTune TT Next" : _currentLyric,
+                      style: const TextStyle(color: Colors.greenAccent, fontSize: 24, fontWeight: FontWeight.bold, shadows: [Shadow(color: Colors.black, blurRadius: 4)]),
                     ),
                   ),
-                  // Detachable Playlist Panel
-                  AnimatedContainer(
-                    duration: const Duration(milliseconds: 300),
-                    width: _showPlaylist ? 400 : 0,
-                    margin: EdgeInsets.only(left: _showPlaylist ? 8 : 0),
-                    decoration: BoxDecoration(color: Colors.black, border: Border.all(color: _showPlaylist ? Colors.grey[800]! : Colors.transparent)),
-                    child: _showPlaylist ? Column(
-                      children: [
-                        Container(padding: const EdgeInsets.all(8), color: Colors.grey[900], width: double.infinity, child: const Text('PLAYLIST', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold))),
-                        Expanded(
-                          child: _playlist.isEmpty
-                              ? const Center(child: Text('Playlist empty', style: TextStyle(color: Colors.grey)))
-                              : ListView.builder(
-                                  itemCount: _playlist.length,
-                                  itemBuilder: (context, index) {
-                                    final item = _playlist[index];
-                                    final bool isSelected = _currentTitle == item['fileName'];
-                                    return ListTile(
-                                      dense: true,
-                                      leading: Icon(Icons.music_note, size: 16, color: isSelected ? Colors.greenAccent : Colors.grey),
-                                      title: Text(item['fileName'], style: TextStyle(color: isSelected ? Colors.greenAccent : Colors.white, fontSize: 12)),
-                                      onTap: () => _loadFile(item['path'], item['fileName'], item['albumArtPath'] ?? ''),
-                                    );
-                                  },
-                                ),
-                        ),
-                      ],
-                    ) : null,
-                  ),
-                ],
+                ),
               ),
-            ),
           ],
         ),
       ),
