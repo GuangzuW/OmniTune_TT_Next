@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart'; // for kIsWeb
 import 'package:audio_service/audio_service.dart';
+import 'package:window_manager/window_manager.dart';
+import 'package:hotkey_manager/hotkey_manager.dart';
 import 'audio_player_ffi.dart';
 import 'metadata_cache.dart';
 import 'tray_service.dart';
@@ -12,6 +14,21 @@ late BackgroundAudioHandler _audioHandler;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  if (!kIsWeb && (Platform.isMacOS || Platform.isWindows || Platform.isLinux)) {
+    await windowManager.ensureInitialized();
+    WindowOptions windowOptions = const WindowOptions(
+      size: Size(800, 600),
+      center: true,
+      backgroundColor: Colors.transparent,
+      skipTaskbar: false,
+      titleBarStyle: TitleBarStyle.hidden,
+    );
+    windowManager.waitUntilReadyToShow(windowOptions, () async {
+      await windowManager.show();
+      await windowManager.focus();
+    });
+    await hotKeyManager.unregisterAll();
+  }
   runApp(const TTPlayerApp());
 }
 
@@ -42,7 +59,7 @@ class PlayerHomePage extends StatefulWidget {
   State<PlayerHomePage> createState() => _PlayerHomePageState();
 }
 
-class _PlayerHomePageState extends State<PlayerHomePage> {
+class _PlayerHomePageState extends State<PlayerHomePage> with WindowListener {
   AudioPlayerFFI? _player;
   bool _isPlaying = false;
   double _position = 0.0;
@@ -61,7 +78,41 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
   @override
   void initState() {
     super.initState();
+    windowManager.addListener(this);
     _initServices();
+    _initHotKeys();
+  }
+
+  @override
+  void dispose() {
+    windowManager.removeListener(this);
+    _timer?.cancel();
+    _player?.dispose();
+    super.dispose();
+  }
+
+  Future<void> _initHotKeys() async {
+    // Play/Pause: Alt + P
+    HotKey playPauseKey = HotKey(
+      KeyCode.keyP,
+      modifiers: [KeyModifier.alt],
+      scope: HotKeyScope.system,
+    );
+    await hotKeyManager.register(
+      playPauseKey,
+      keyDownHandler: (hotKey) => _togglePlay(),
+    );
+
+    // Stop: Alt + S
+    HotKey stopKey = HotKey(
+      KeyCode.keyS,
+      modifiers: [KeyModifier.alt],
+      scope: HotKeyScope.system,
+    );
+    await hotKeyManager.register(
+      stopKey,
+      keyDownHandler: (hotKey) => _stop(),
+    );
   }
 
   Future<void> _initServices() async {
@@ -94,9 +145,7 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
 
   Future<void> _loadPlaylist() async {
     final files = await _cache.getFiles();
-    setState(() {
-      _playlist = files;
-    });
+    setState(() => _playlist = files);
   }
 
   void _updateCurrentLyric() {
@@ -141,13 +190,6 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
         _updateCurrentLyric();
       }
     });
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    _player?.dispose();
-    super.dispose();
   }
 
   void _togglePlay() {
@@ -207,143 +249,166 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF1A1A1A),
-      appBar: AppBar(
-        backgroundColor: Colors.black,
-        title: const Text('OmniTune TT Next', style: TextStyle(color: Colors.white, fontSize: 14)),
-        actions: [
-          IconButton(icon: Icon(_showEqualizer ? Icons.equalizer : Icons.equalizer_outlined), onPressed: () => setState(() => _showEqualizer = !_showEqualizer)),
-          IconButton(icon: Icon(_showPlaylist ? Icons.list : Icons.list_outlined), onPressed: () => setState(() => _showPlaylist = !_showPlaylist)),
-          IconButton(icon: const Icon(Icons.refresh), onPressed: _scanDirectory),
-        ],
-      ),
-      body: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Main Player Window
-          Container(
-            width: 320,
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(border: Border.all(color: Colors.grey[800]!), color: Colors.black),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(30),
+        child: GestureDetector(
+          onPanStart: (details) => windowManager.startDragging(),
+          child: Container(
+            color: Colors.black,
+            child: Row(
               children: [
-                // LCD Display
-                Container(
-                  height: 120,
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(color: Colors.black, border: Border.all(color: Colors.greenAccent, width: 2)),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(_formatTime(_position), style: const TextStyle(color: Colors.greenAccent, fontSize: 40, fontFamily: 'Courier', fontWeight: FontWeight.bold)),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Text('KBPS: 320', style: TextStyle(color: Colors.greenAccent.withOpacity(0.7), fontSize: 10)),
-                              Text('KHZ: 44.1', style: TextStyle(color: Colors.greenAccent.withOpacity(0.7), fontSize: 10)),
-                            ],
-                          )
-                        ],
-                      ),
-                      const SizedBox(height: 5),
-                      Text(_currentTitle, style: const TextStyle(color: Colors.greenAccent, fontSize: 12, overflow: TextOverflow.ellipsis)),
-                      const SizedBox(height: 5),
-                      Text(_currentLyric.isEmpty ? "OMNITUNE TT NEXT" : _currentLyric.toUpperCase(), style: const TextStyle(color: Colors.greenAccent, fontSize: 10, overflow: TextOverflow.ellipsis)),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 10),
-                // Visualization / Progress
-                SliderTheme(
-                  data: SliderTheme.of(context).copyWith(trackHeight: 2, thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6)),
-                  child: Slider(
-                    value: _position.clamp(0.0, _duration),
-                    max: _duration,
-                    activeColor: Colors.greenAccent,
-                    onChanged: (v) {
-                      setState(() => _position = v);
-                      _audioHandler.seek(Duration(milliseconds: (v * 1000).toInt()));
-                    },
-                  ),
-                ),
-                // Controls
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    IconButton(icon: const Icon(Icons.skip_previous, color: Colors.white), onPressed: () {}),
-                    IconButton(icon: Icon(_isPlaying ? Icons.pause_circle_filled : Icons.play_circle_filled, color: Colors.greenAccent), onPressed: _togglePlay, iconSize: 48),
-                    IconButton(icon: const Icon(Icons.stop, color: Colors.white), onPressed: _stop),
-                    IconButton(icon: const Icon(Icons.skip_next, color: Colors.white), onPressed: () {}),
-                  ],
-                ),
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 300),
-                  height: _showEqualizer ? 100 : 0,
-                  curve: Curves.easeInOut,
-                  child: _showEqualizer ? Column(
-                    children: [
-                      const Divider(color: Colors.greenAccent),
-                      Expanded(
-                        child: ListView.builder(
-                          scrollDirection: Axis.horizontal,
-                          itemCount: 10,
-                          itemBuilder: (context, index) {
-                            final freqs = [31, 62, 125, 250, 500, 1000, 2000, 4000, 8000, 16000];
-                            return Column(
-                              children: [
-                                Expanded(
-                                  child: RotatedBox(quarterTurns: 3, child: Slider(
-                                    value: _eqGains[index], min: -12.0, max: 12.0, activeColor: Colors.greenAccent,
-                                    onChanged: (v) {
-                                      setState(() => _eqGains[index] = v);
-                                      _player?.setEqBandGain(index, v);
-                                    },
-                                  )),
-                                ),
-                                Text("${freqs[index] < 1000 ? freqs[index] : '${freqs[index]~/1000}k'}", style: const TextStyle(fontSize: 8, color: Colors.greenAccent)),
-                              ],
-                            );
-                          },
-                        ),
-                      ),
-                    ],
-                  ) : null,
-                )
+                const SizedBox(width: 10),
+                const Text('OmniTune TT Next', style: TextStyle(color: Colors.white, fontSize: 12)),
+                const Spacer(),
+                IconButton(icon: const Icon(Icons.remove, size: 16), onPressed: () => windowManager.minimize()),
+                IconButton(icon: const Icon(Icons.close, size: 16), onPressed: () => windowManager.close()),
               ],
             ),
           ),
-          // Detachable Playlist Panel
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 300),
-            width: _showPlaylist ? 400 : 0,
-            margin: EdgeInsets.only(left: _showPlaylist ? 8 : 0),
-            decoration: BoxDecoration(color: Colors.black, border: Border.all(color: _showPlaylist ? Colors.grey[800]! : Colors.transparent)),
-            child: _showPlaylist ? Column(
+        ),
+      ),
+      body: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              IconButton(icon: Icon(_showEqualizer ? Icons.equalizer : Icons.equalizer_outlined), onPressed: () => setState(() => _showEqualizer = !_showEqualizer)),
+              IconButton(icon: Icon(_showPlaylist ? Icons.list : Icons.list_outlined), onPressed: () => setState(() => _showPlaylist = !_showPlaylist)),
+              IconButton(icon: const Icon(Icons.refresh), onPressed: _scanDirectory),
+            ],
+          ),
+          Expanded(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(padding: const EdgeInsets.all(8), color: Colors.grey[900], width: double.infinity, child: const Text('PLAYLIST', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold))),
-                Expanded(
-                  child: _playlist.isEmpty
-                      ? const Center(child: Text('Playlist empty', style: TextStyle(color: Colors.grey)))
-                      : ListView.builder(
-                          itemCount: _playlist.length,
-                          itemBuilder: (context, index) {
-                            final item = _playlist[index];
-                            final bool isSelected = _currentTitle == item['fileName'];
-                            return ListTile(
-                              dense: true,
-                              leading: Icon(Icons.music_note, size: 16, color: isSelected ? Colors.greenAccent : Colors.grey),
-                              title: Text(item['fileName'], style: TextStyle(color: isSelected ? Colors.greenAccent : Colors.white, fontSize: 12)),
-                              onTap: () => _loadFile(item['path'], item['fileName']),
-                            );
+                // Main Player Window
+                Container(
+                  width: 320,
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(border: Border.all(color: Colors.grey[800]!), color: Colors.black),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // LCD Display
+                      Container(
+                        height: 120,
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(color: Colors.black, border: Border.all(color: Colors.greenAccent, width: 2)),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(_formatTime(_position), style: const TextStyle(color: Colors.greenAccent, fontSize: 40, fontFamily: 'Courier', fontWeight: FontWeight.bold)),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    Text('KBPS: 320', style: TextStyle(color: Colors.greenAccent.withOpacity(0.7), fontSize: 10)),
+                                    Text('KHZ: 44.1', style: TextStyle(color: Colors.greenAccent.withOpacity(0.7), fontSize: 10)),
+                                  ],
+                                )
+                              ],
+                            ),
+                            const SizedBox(height: 5),
+                            Text(_currentTitle, style: const TextStyle(color: Colors.greenAccent, fontSize: 12, overflow: TextOverflow.ellipsis)),
+                            const SizedBox(height: 5),
+                            Text(_currentLyric.isEmpty ? "OMNITUNE TT NEXT" : _currentLyric.toUpperCase(), style: const TextStyle(color: Colors.greenAccent, fontSize: 10, overflow: TextOverflow.ellipsis)),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      // Visualization / Progress
+                      SliderTheme(
+                        data: SliderTheme.of(context).copyWith(trackHeight: 2, thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6)),
+                        child: Slider(
+                          value: _position.clamp(0.0, _duration),
+                          max: _duration,
+                          activeColor: Colors.greenAccent,
+                          onChanged: (v) {
+                            setState(() => _position = v);
+                            _audioHandler.seek(Duration(milliseconds: (v * 1000).toInt()));
                           },
                         ),
+                      ),
+                      // Controls
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          IconButton(icon: const Icon(Icons.skip_previous, color: Colors.white), onPressed: () {}),
+                          IconButton(icon: Icon(_isPlaying ? Icons.pause_circle_filled : Icons.play_circle_filled, color: Colors.greenAccent), onPressed: _togglePlay, iconSize: 48),
+                          IconButton(icon: const Icon(Icons.stop, color: Colors.white), onPressed: _stop),
+                          IconButton(icon: const Icon(Icons.skip_next, color: Colors.white), onPressed: () {}),
+                        ],
+                      ),
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 300),
+                        height: _showEqualizer ? 100 : 0,
+                        curve: Curves.easeInOut,
+                        child: _showEqualizer ? Column(
+                          children: [
+                            const Divider(color: Colors.greenAccent),
+                            Expanded(
+                              child: ListView.builder(
+                                scrollDirection: Axis.horizontal,
+                                itemCount: 10,
+                                itemBuilder: (context, index) {
+                                  final freqs = [31, 62, 125, 250, 500, 1000, 2000, 4000, 8000, 16000];
+                                  return Column(
+                                    children: [
+                                      Expanded(
+                                        child: RotatedBox(quarterTurns: 3, child: Slider(
+                                          value: _eqGains[index], min: -12.0, max: 12.0, activeColor: Colors.greenAccent,
+                                          onChanged: (v) {
+                                            setState(() => _eqGains[index] = v);
+                                            _player?.setEqBandGain(index, v);
+                                          },
+                                        )),
+                                      ),
+                                      Text("${freqs[index] < 1000 ? freqs[index] : '${freqs[index]~/1000}k'}", style: const TextStyle(fontSize: 8, color: Colors.greenAccent)),
+                                    ],
+                                  );
+                                },
+                              ),
+                            ),
+                          ],
+                        ) : null,
+                      )
+                    ],
+                  ),
+                ),
+                // Detachable Playlist Panel
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 300),
+                  width: _showPlaylist ? 400 : 0,
+                  margin: EdgeInsets.only(left: _showPlaylist ? 8 : 0),
+                  decoration: BoxDecoration(color: Colors.black, border: Border.all(color: _showPlaylist ? Colors.grey[800]! : Colors.transparent)),
+                  child: _showPlaylist ? Column(
+                    children: [
+                      Container(padding: const EdgeInsets.all(8), color: Colors.grey[900], width: double.infinity, child: const Text('PLAYLIST', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold))),
+                      Expanded(
+                        child: _playlist.isEmpty
+                            ? const Center(child: Text('Playlist empty', style: TextStyle(color: Colors.grey)))
+                            : ListView.builder(
+                                itemCount: _playlist.length,
+                                itemBuilder: (context, index) {
+                                  final item = _playlist[index];
+                                  final bool isSelected = _currentTitle == item['fileName'];
+                                  return ListTile(
+                                    dense: true,
+                                    leading: Icon(Icons.music_note, size: 16, color: isSelected ? Colors.greenAccent : Colors.grey),
+                                    title: Text(item['fileName'], style: TextStyle(color: isSelected ? Colors.greenAccent : Colors.white, fontSize: 12)),
+                                    onTap: () => _loadFile(item['path'], item['fileName']),
+                                  );
+                                },
+                              ),
+                      ),
+                    ],
+                  ) : null,
                 ),
               ],
-            ) : null,
+            ),
           ),
         ],
       ),
