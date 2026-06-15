@@ -1,0 +1,106 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  core:
+    name: C++ core + unit test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install audio dev libs
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev
+      - name: Configure & build
+        run: |
+          cmake -S core -B core/build
+          cmake --build core/build
+      - name: Run core test
+        run: ./core/build/test_core
+
+  wasm:
+    name: WebAssembly core
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mymindstorm/setup-emsdk@v14
+      - name: Build WASM
+        run: bash scripts/emsdk_build.sh
+      - name: Check artifacts
+        run: test -f core/build_wasm/TTPlayerCore.wasm && test -f core/build_wasm/TTPlayerCore.js
+
+  backend:
+    name: Go backend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version: '1.21' }
+      - name: Build & vet
+        working-directory: backend
+        run: |
+          go build ./...
+          go vet ./...
+
+  web:
+    name: Next.js web
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+      - name: Install & build
+        working-directory: web
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
+
+  helm:
+    name: Helm lint + schema validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+      - name: Lint
+        run: helm lint deploy/helm/omnitune
+      - name: Template
+        run: helm template omni deploy/helm/omnitune > /tmp/rendered.yaml
+      - name: kubeconform
+        run: |
+          curl -sL https://github.com/yannh/kubeconform/releases/latest/download/kubeconform-linux-amd64.tar.gz | tar xz
+          ./kubeconform -strict -summary -skip ServiceMonitor /tmp/rendered.yaml
+
+  images:
+    name: Build & push images
+    runs-on: ubuntu-latest
+    needs: [backend, web]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        include:
+          - { name: aggregator, context: backend, dockerfile: backend/Dockerfile }
+          - { name: user-sync, context: backend, dockerfile: backend/Dockerfile.user_sync }
+          - { name: web, context: web, dockerfile: web/Dockerfile }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build & push
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: ghcr.io/${{ github.repository }}/omnitune-${{ matrix.name }}:latest
+          provenance: false
