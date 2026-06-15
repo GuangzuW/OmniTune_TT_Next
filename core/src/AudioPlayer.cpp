@@ -2,20 +2,6 @@
 #include "AudioPlayer.h"
 #include <iostream>
 
-// Callback to process audio frames through the equalizer filters
-void audio_processing_callback(void* pUserData, ma_node* pNode, const float** ppFramesIn, ma_uint32* pFrameCountIn, float** ppFramesOut, ma_uint32* pFrameCountOut) {
-    (void)pNode;
-    (void)ppFramesIn;
-    (void)pFrameCountIn;
-
-    AudioPlayer* pPlayer = static_cast<AudioPlayer*>(pUserData);
-    if (!pPlayer || !pPlayer->isPlaying()) return;
-
-    // We can't easily access the internal Equalizer filters from here if they are private.
-    // However, for this demo, we'll assume the filters can be processed.
-    // In a real implementation, we'd need a way to access them.
-}
-
 AudioPlayer::AudioPlayer() {
     ma_result result = ma_engine_init(NULL, &engine);
     if (result != MA_SUCCESS) {
@@ -56,8 +42,15 @@ bool AudioPlayer::load(const std::string& filePath) {
         return false;
     }
 
-    // Connect sound to the processing chain if needed
-    // For now, we'll implement simple gain setting.
+    // Route the sound through the equalizer chain instead of straight to the
+    // endpoint, so per-band gains actually affect the rendered audio. If the
+    // equalizer has no initialized bands, leave the default endpoint routing.
+    if (equalizer != nullptr) {
+        ma_node* eqInput = equalizer->getInputNode();
+        if (eqInput != NULL) {
+            ma_node_attach_output_bus(&sound, 0, eqInput, 0);
+        }
+    }
 
     isSoundLoaded = true;
     return true;
@@ -67,6 +60,20 @@ void AudioPlayer::setEqBandGain(int bandIndex, float gain) {
     if (equalizer) {
         equalizer->setBandGain(bandIndex, gain);
     }
+}
+
+void AudioPlayer::setVolume(float volume) {
+    if (isInitialized) {
+        if (volume < 0.0f) volume = 0.0f;
+        ma_engine_set_volume(&engine, volume);
+    }
+}
+
+float AudioPlayer::getVolume() {
+    if (isInitialized) {
+        return ma_engine_get_volume(&engine);
+    }
+    return 1.0f;
 }
 
 void AudioPlayer::play() {
@@ -138,6 +145,9 @@ EMSCRIPTEN_BINDINGS(audio_player) {
         .function("seekTo", &AudioPlayer::seekTo)
         .function("getPosition", &AudioPlayer::getPosition)
         .function("getDuration", &AudioPlayer::getDuration)
-        .function("isPlaying", &AudioPlayer::isPlaying);
+        .function("isPlaying", &AudioPlayer::isPlaying)
+        .function("setEqBandGain", &AudioPlayer::setEqBandGain)
+        .function("setVolume", &AudioPlayer::setVolume)
+        .function("getVolume", &AudioPlayer::getVolume);
 }
 #endif
