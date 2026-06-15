@@ -4,6 +4,11 @@ import 'audio_player_ffi.dart';
 class BackgroundAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   final AudioPlayerFFI _player;
 
+  // Wired by the UI so OS media controls (lock screen, headset, notification)
+  // can drive playlist navigation, which lives in the widget layer.
+  void Function()? onNext;
+  void Function()? onPrev;
+
   BackgroundAudioHandler(this._player) {
     _player.isPlaying(); // Ensure player is ready
   }
@@ -13,7 +18,7 @@ class BackgroundAudioHandler extends BaseAudioHandler with QueueHandler, SeekHan
     _player.play();
     playbackState.add(playbackState.value.copyWith(
       playing: true,
-      controls: [MediaControl.pause, MediaControl.stop],
+      controls: [MediaControl.skipToPrevious, MediaControl.pause, MediaControl.stop, MediaControl.skipToNext],
       systemActions: {MediaAction.seek},
     ));
   }
@@ -23,9 +28,15 @@ class BackgroundAudioHandler extends BaseAudioHandler with QueueHandler, SeekHan
     _player.pause();
     playbackState.add(playbackState.value.copyWith(
       playing: false,
-      controls: [MediaControl.play, MediaControl.stop],
+      controls: [MediaControl.skipToPrevious, MediaControl.play, MediaControl.stop, MediaControl.skipToNext],
     ));
   }
+
+  @override
+  Future<void> skipToNext() async => onNext?.call();
+
+  @override
+  Future<void> skipToPrevious() async => onPrev?.call();
 
   @override
   Future<void> stop() async {
