@@ -1,4 +1,5 @@
 #include "FileScanner.h"
+#include "MetadataExtractor.h"
 #include <algorithm>
 #include <iostream>
 
@@ -40,6 +41,13 @@ std::vector<AudioFileInfo> FileScanner::scanDirectory(const std::string& directo
                     info.fileName = entry.path().filename().string();
                     info.extension = ext;
                     info.albumArtPath = findAlbumArt(entry.path().parent_path());
+
+                    AudioMetadata meta = MetadataExtractor::extract(info.path);
+                    info.title = meta.title;
+                    info.artist = meta.artist;
+                    info.album = meta.album;
+                    info.durationSeconds = meta.durationSeconds;
+
                     audioFiles.push_back(info);
                 }
             }

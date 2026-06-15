@@ -9,6 +9,10 @@ struct AudioFileInfo {
     std::string fileName;
     std::string extension;
     std::string albumArtPath;
+    std::string title;
+    std::string artist;
+    std::string album;
+    float durationSeconds = 0.0f;
 };
 
 class FileScanner {
