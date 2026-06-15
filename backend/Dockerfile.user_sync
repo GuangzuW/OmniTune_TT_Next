@@ -5,10 +5,11 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -o user_sync user_sync/main.go
+# Output to /out to avoid colliding with the ./user_sync source directory.
+RUN CGO_ENABLED=0 GOOS=linux go build -o /out/user_sync ./user_sync
 
 FROM alpine:latest
 WORKDIR /root/
-COPY --from=builder /app/user_sync .
+COPY --from=builder /out/user_sync .
 EXPOSE 8001
 CMD ["./user_sync"]

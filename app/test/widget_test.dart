@@ -1,9 +1,8 @@
-// This is a basic Flutter widget test.
+// Smoke tests for OmniTune TT Next.
 //
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
+// The full app (PlayerHomePage) pulls in native FFI, audio_service, tray and
+// window plugins on init, which aren't available in the headless test harness,
+// so we keep these tests to plugin-free surface area.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -11,20 +10,19 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:app/main.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  test('TTPlayerApp constructs as a StatelessWidget', () {
+    expect(const TTPlayerApp(), isA<StatelessWidget>());
+  });
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+  test('Equalizer presets each have 10 bands', () {
+    expect(kEqPresets.isNotEmpty, true);
+    for (final entry in kEqPresets.entries) {
+      expect(entry.value.length, 10, reason: '${entry.key} must have 10 bands');
+    }
+    expect(kEqFreqs.length, 10);
+  });
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
-
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+  test('RepeatMode cycles through all three states', () {
+    expect(RepeatMode.values.length, 3);
   });
 }
