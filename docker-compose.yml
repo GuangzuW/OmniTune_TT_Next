@@ -1,6 +1,14 @@
-version: '3.8'
-
 services:
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    depends_on:
+      - aggregator
+      - user-sync
+
   aggregator:
     build:
       context: ./backend
@@ -9,8 +17,10 @@ services:
       - "8000:8000"
     environment:
       - REDIS_ADDR=redis:6379
+      - NATS_URL=nats://nats:4222
     depends_on:
       - redis
+      - nats
 
   user-sync:
     build:
@@ -20,6 +30,7 @@ services:
       - "8001:8001"
     environment:
       - DATABASE_URL=postgres://postgres:postgres@db:5432/postgres?sslmode=disable
+      - JWT_SECRET=local-dev-secret
     depends_on:
       - db
 
@@ -29,8 +40,52 @@ services:
       - "6379:6379"
 
   db:
-    image: postgres:alpine
+    image: postgres:16-alpine
     environment:
       - POSTGRES_PASSWORD=postgres
     ports:
       - "5432:5432"
+
+  nats:
+    image: nats:2.10-alpine
+    command: ["-m", "8222", "-js"]
+    ports:
+      - "4222:4222"   # client
+      - "8222:8222"   # monitoring
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin
+    ports:
+      - "9000:9000"   # S3 API
+      - "9001:9001"   # console
+    volumes:
+      - minio-data:/data
+
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./deploy/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+    depends_on:
+      - aggregator
+      - user-sync
+
+  grafana:
+    image: grafana/grafana:latest
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+    volumes:
+      - ./deploy/observability/grafana/provisioning:/etc/grafana/provisioning:ro
+    ports:
+      - "3001:3000"
+    depends_on:
+      - prometheus
+
+volumes:
+  minio-data:
