@@ -21,6 +21,9 @@ public:
 
     void setEqBandGain(int bandIndex, float gain);
 
+    void setVolume(float volume); // 0.0 (mute) .. 1.0 (unity) and above
+    float getVolume();
+
 private:
     ma_engine engine;
     ma_sound sound;
