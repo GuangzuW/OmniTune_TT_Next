@@ -1,0 +1,65 @@
+{{- if .Values.userSync.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-user-sync
+  labels:
+    {{- include "omnitune.labels" . | nindent 4 }}
+    app: user-sync
+spec:
+  replicas: {{ .Values.userSync.replicas }}
+  selector:
+    matchLabels:
+      app: user-sync
+  template:
+    metadata:
+      labels:
+        app: user-sync
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "{{ .Values.userSync.port }}"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+        - name: user-sync
+          image: {{ include "omnitune.image" (dict "root" . "repo" .Values.userSync.repository) }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.userSync.port }}
+          env:
+            - name: DATABASE_URL
+              value: "postgres://postgres:$(POSTGRES_PASSWORD)@{{ .Release.Name }}-postgres:5432/postgres?sslmode=disable"
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-secrets
+                  key: postgresPassword
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-secrets
+                  key: jwtSecret
+          readinessProbe:
+            httpGet: { path: /health, port: {{ .Values.userSync.port }} }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /health, port: {{ .Values.userSync.port }} }
+            initialDelaySeconds: 8
+            periodSeconds: 15
+          resources: {{- toYaml .Values.userSync.resources | nindent 12 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-user-sync
+  labels:
+    {{- include "omnitune.labels" . | nindent 4 }}
+    app: user-sync
+spec:
+  selector:
+    app: user-sync
+  ports:
+    - port: {{ .Values.userSync.port }}
+      targetPort: {{ .Values.userSync.port }}
+{{- end }}

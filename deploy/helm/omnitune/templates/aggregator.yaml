@@ -1,0 +1,57 @@
+{{- if .Values.aggregator.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-aggregator
+  labels:
+    {{- include "omnitune.labels" . | nindent 4 }}
+    app: aggregator
+spec:
+  replicas: {{ .Values.aggregator.replicas }}
+  selector:
+    matchLabels:
+      app: aggregator
+  template:
+    metadata:
+      labels:
+        app: aggregator
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "{{ .Values.aggregator.port }}"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+        - name: aggregator
+          image: {{ include "omnitune.image" (dict "root" . "repo" .Values.aggregator.repository) }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.aggregator.port }}
+          env:
+            - name: REDIS_ADDR
+              value: "{{ .Release.Name }}-redis:6379"
+            - name: NATS_URL
+              value: "nats://{{ .Release.Name }}-nats:4222"
+          readinessProbe:
+            httpGet: { path: /health, port: {{ .Values.aggregator.port }} }
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /health, port: {{ .Values.aggregator.port }} }
+            initialDelaySeconds: 5
+            periodSeconds: 15
+          resources: {{- toYaml .Values.aggregator.resources | nindent 12 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-aggregator
+  labels:
+    {{- include "omnitune.labels" . | nindent 4 }}
+    app: aggregator
+spec:
+  selector:
+    app: aggregator
+  ports:
+    - port: {{ .Values.aggregator.port }}
+      targetPort: {{ .Values.aggregator.port }}
+{{- end }}

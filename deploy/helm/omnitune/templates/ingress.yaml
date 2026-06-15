@@ -1,0 +1,37 @@
+{{- if .Values.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ .Release.Name }}-ingress
+  labels:
+    {{- include "omnitune.labels" . | nindent 4 }}
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  rules:
+    - host: {{ .Values.ingress.host }}
+      http:
+        paths:
+          # Aggregator (Audius search + stream proxy)
+          - path: /api/agg(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: {{ .Release.Name }}-aggregator
+                port: { number: {{ .Values.aggregator.port }} }
+          # User-sync (auth + cloud playlists)
+          - path: /api/usr(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: {{ .Release.Name }}-user-sync
+                port: { number: {{ .Values.userSync.port }} }
+          # Web (Next.js) — catch-all
+          - path: /()(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: {{ .Release.Name }}-web
+                port: { number: {{ .Values.web.port }} }
+{{- end }}

@@ -1,0 +1,78 @@
+# Default values for the OmniTune chart.
+nameOverride: ""
+
+image:
+  registry: ""          # e.g. ghcr.io/youruser ; empty = local images (kind load)
+  pullPolicy: IfNotPresent
+  tag: latest
+
+web:
+  enabled: true
+  repository: omnitune-web
+  replicas: 2
+  port: 3000
+  # Browser-facing backend URLs (baked into the client at build time normally;
+  # here passed as runtime env for SSR / documentation).
+  aggregatorUrl: "http://localhost:8000"
+  userSyncUrl: "http://localhost:8001"
+  resources:
+    requests: { cpu: "50m", memory: "128Mi" }
+    limits: { cpu: "500m", memory: "512Mi" }
+
+aggregator:
+  enabled: true
+  repository: omnitune-aggregator
+  replicas: 2
+  port: 8000
+  resources:
+    requests: { cpu: "50m", memory: "64Mi" }
+    limits: { cpu: "300m", memory: "256Mi" }
+
+userSync:
+  enabled: true
+  repository: omnitune-user-sync
+  replicas: 2
+  port: 8001
+  resources:
+    requests: { cpu: "50m", memory: "64Mi" }
+    limits: { cpu: "300m", memory: "256Mi" }
+
+redis:
+  enabled: true
+  image: redis:alpine
+
+postgres:
+  enabled: true
+  image: postgres:16-alpine
+  storage: 1Gi
+
+nats:
+  enabled: true
+  image: nats:2.10-alpine
+
+minio:
+  enabled: true
+  image: minio/minio:latest
+  storage: 2Gi
+
+# JWT secret for user-sync. Override in production: --set secrets.jwtSecret=...
+secrets:
+  jwtSecret: "change-me-in-production"
+  postgresPassword: "postgres"
+
+ingress:
+  enabled: true
+  className: nginx
+  host: omnitune.local
+  # path / -> web, /api/search,/api/stream -> aggregator, /api/auth,/api/sync,/api/playlists -> user-sync
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 70
+
+# Set true when kube-prometheus-stack (Prometheus Operator) is installed, to
+# create ServiceMonitors for the Go services.
+serviceMonitor:
+  enabled: false

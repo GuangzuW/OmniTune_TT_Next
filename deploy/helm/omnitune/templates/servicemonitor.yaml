@@ -1,0 +1,19 @@
+{{- if .Values.serviceMonitor.enabled }}
+{{- range $svc := tuple "aggregator" "user-sync" }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ $.Release.Name }}-{{ $svc }}
+  labels:
+    {{- include "omnitune.labels" $ | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      app: {{ $svc }}
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 15s
+{{- end }}
+{{- end }}
