@@ -28,6 +28,10 @@ typedef AudioPlayerIsPlayingNative = ffi.Bool Function(ffi.Pointer<ffi.Void>);
 typedef AudioPlayerIsPlaying = bool Function(ffi.Pointer<ffi.Void>);
 typedef AudioPlayerSetEqBandGainNative = ffi.Void Function(ffi.Pointer<ffi.Void>, ffi.Int32, ffi.Float);
 typedef AudioPlayerSetEqBandGain = void Function(ffi.Pointer<ffi.Void>, int, double);
+typedef AudioPlayerSetVolumeNative = ffi.Void Function(ffi.Pointer<ffi.Void>, ffi.Float);
+typedef AudioPlayerSetVolume = void Function(ffi.Pointer<ffi.Void>, double);
+typedef AudioPlayerGetVolumeNative = ffi.Float Function(ffi.Pointer<ffi.Void>);
+typedef AudioPlayerGetVolume = double Function(ffi.Pointer<ffi.Void>);
 
 // Scanner
 typedef FileScannerScanNative = ffi.Pointer<ffi.Void> Function(ffi.Pointer<Utf8>);
@@ -40,6 +44,14 @@ typedef ScanResultGetFileNameNative = ffi.Pointer<Utf8> Function(ffi.Pointer<ffi
 typedef ScanResultGetFileName = ffi.Pointer<Utf8> Function(ffi.Pointer<ffi.Void>, int);
 typedef ScanResultGetAlbumArtPathNative = ffi.Pointer<Utf8> Function(ffi.Pointer<ffi.Void>, ffi.Int32);
 typedef ScanResultGetAlbumArtPath = ffi.Pointer<Utf8> Function(ffi.Pointer<ffi.Void>, int);
+typedef ScanResultGetTitleNative = ffi.Pointer<Utf8> Function(ffi.Pointer<ffi.Void>, ffi.Int32);
+typedef ScanResultGetTitle = ffi.Pointer<Utf8> Function(ffi.Pointer<ffi.Void>, int);
+typedef ScanResultGetArtistNative = ffi.Pointer<Utf8> Function(ffi.Pointer<ffi.Void>, ffi.Int32);
+typedef ScanResultGetArtist = ffi.Pointer<Utf8> Function(ffi.Pointer<ffi.Void>, int);
+typedef ScanResultGetAlbumNative = ffi.Pointer<Utf8> Function(ffi.Pointer<ffi.Void>, ffi.Int32);
+typedef ScanResultGetAlbum = ffi.Pointer<Utf8> Function(ffi.Pointer<ffi.Void>, int);
+typedef ScanResultGetDurationNative = ffi.Float Function(ffi.Pointer<ffi.Void>, ffi.Int32);
+typedef ScanResultGetDuration = double Function(ffi.Pointer<ffi.Void>, int);
 typedef ScanResultDestroyNative = ffi.Void Function(ffi.Pointer<ffi.Void>);
 typedef ScanResultDestroy = void Function(ffi.Pointer<ffi.Void>);
 
@@ -59,7 +71,19 @@ class AudioFileInfo {
   final String path;
   final String fileName;
   final String albumArtPath;
-  AudioFileInfo(this.path, this.fileName, this.albumArtPath);
+  final String title;
+  final String artist;
+  final String album;
+  final double duration;
+  AudioFileInfo(
+    this.path,
+    this.fileName,
+    this.albumArtPath, {
+    this.title = "",
+    this.artist = "",
+    this.album = "",
+    this.duration = 0.0,
+  });
 }
 
 class LyricLine {
@@ -84,6 +108,8 @@ class AudioPlayerFFI {
   late AudioPlayerGetDuration _getDuration;
   late AudioPlayerIsPlaying _isPlaying;
   late AudioPlayerSetEqBandGain _setEqBandGain;
+  late AudioPlayerSetVolume _setVolume;
+  late AudioPlayerGetVolume _getVolume;
 
   // Scanner methods
   late FileScannerScan _scan;
@@ -91,6 +117,10 @@ class AudioPlayerFFI {
   late ScanResultGetPath _getScanPath;
   late ScanResultGetFileName _getScanFileName;
   late ScanResultGetAlbumArtPath _getScanAlbumArtPath;
+  late ScanResultGetTitle _getScanTitle;
+  late ScanResultGetArtist _getScanArtist;
+  late ScanResultGetAlbum _getScanAlbum;
+  late ScanResultGetDuration _getScanDuration;
   late ScanResultDestroy _destroyScanResult;
 
   // Lyrics methods
@@ -114,12 +144,18 @@ class AudioPlayerFFI {
     _getDuration = _lib.lookupFunction<AudioPlayerGetDurationNative, AudioPlayerGetDuration>('AudioPlayer_getDuration');
     _isPlaying = _lib.lookupFunction<AudioPlayerIsPlayingNative, AudioPlayerIsPlaying>('AudioPlayer_isPlaying');
     _setEqBandGain = _lib.lookupFunction<AudioPlayerSetEqBandGainNative, AudioPlayerSetEqBandGain>('AudioPlayer_setEqBandGain');
+    _setVolume = _lib.lookupFunction<AudioPlayerSetVolumeNative, AudioPlayerSetVolume>('AudioPlayer_setVolume');
+    _getVolume = _lib.lookupFunction<AudioPlayerGetVolumeNative, AudioPlayerGetVolume>('AudioPlayer_getVolume');
 
     _scan = _lib.lookupFunction<FileScannerScanNative, FileScannerScan>('FileScanner_scan');
     _getScanCount = _lib.lookupFunction<ScanResultGetCountNative, ScanResultGetCount>('ScanResult_getCount');
     _getScanPath = _lib.lookupFunction<ScanResultGetPathNative, ScanResultGetPath>('ScanResult_getPath');
     _getScanFileName = _lib.lookupFunction<ScanResultGetFileNameNative, ScanResultGetFileName>('ScanResult_getFileName');
     _getScanAlbumArtPath = _lib.lookupFunction<ScanResultGetAlbumArtPathNative, ScanResultGetAlbumArtPath>('ScanResult_getAlbumArtPath');
+    _getScanTitle = _lib.lookupFunction<ScanResultGetTitleNative, ScanResultGetTitle>('ScanResult_getTitle');
+    _getScanArtist = _lib.lookupFunction<ScanResultGetArtistNative, ScanResultGetArtist>('ScanResult_getArtist');
+    _getScanAlbum = _lib.lookupFunction<ScanResultGetAlbumNative, ScanResultGetAlbum>('ScanResult_getAlbum');
+    _getScanDuration = _lib.lookupFunction<ScanResultGetDurationNative, ScanResultGetDuration>('ScanResult_getDuration');
     _destroyScanResult = _lib.lookupFunction<ScanResultDestroyNative, ScanResultDestroy>('ScanResult_destroy');
 
     _parseLyrics = _lib.lookupFunction<LyricsParserParseNative, LyricsParserParse>('LyricsParser_parse');
@@ -132,16 +168,48 @@ class AudioPlayerFFI {
   }
 
   ffi.DynamicLibrary _loadLibrary() {
-    if (Platform.isMacOS) {
-      final libraryPath = path.join(Directory.current.path, 'core', 'build', 'libTTPlayerCore.dylib');
-      if (File(libraryPath).existsSync()) {
-        return ffi.DynamicLibrary.open(libraryPath);
-      }
-      return ffi.DynamicLibrary.open('libTTPlayerCore.dylib');
+    // iOS links the core statically into the app binary (see TTPlayerCore.podspec),
+    // so its symbols live in the running process.
+    if (Platform.isIOS) {
+      return ffi.DynamicLibrary.process();
     }
-    if (Platform.isWindows) return ffi.DynamicLibrary.open('TTPlayerCore.dll');
-    if (Platform.isLinux) return ffi.DynamicLibrary.open('libTTPlayerCore.so');
-    throw UnsupportedError('Platform not supported: ${Platform.operatingSystem}');
+    // Android bundles libTTPlayerCore.so in the APK; the loader finds it by name.
+    if (Platform.isAndroid) {
+      return ffi.DynamicLibrary.open('libTTPlayerCore.so');
+    }
+
+    final String libName;
+    if (Platform.isMacOS) {
+      libName = 'libTTPlayerCore.dylib';
+    } else if (Platform.isWindows) {
+      libName = 'TTPlayerCore.dll';
+    } else if (Platform.isLinux) {
+      libName = 'libTTPlayerCore.so';
+    } else {
+      throw UnsupportedError('Platform not supported: ${Platform.operatingSystem}');
+    }
+
+    // Candidate locations, in priority order:
+    //  1. next to the running executable (bundled release builds)
+    //  2. common CMake output dirs relative to the working directory (dev runs)
+    //  3. bare name (rely on the OS loader search path)
+    final exeDir = File(Platform.resolvedExecutable).parent.path;
+    final cwd = Directory.current.path;
+    final candidates = <String>[
+      path.join(exeDir, libName),
+      path.join(exeDir, '..', 'Frameworks', libName), // macOS .app bundle layout
+      path.join(cwd, libName),
+      path.join(cwd, 'core', 'build', libName),
+      path.join(cwd, 'core', 'build', 'Release', libName), // MSVC multi-config
+      path.join(cwd, '..', 'core', 'build', libName),
+      path.join(cwd, '..', 'core', 'build', 'Release', libName),
+    ];
+    for (final c in candidates) {
+      if (File(c).existsSync()) {
+        return ffi.DynamicLibrary.open(c);
+      }
+    }
+    return ffi.DynamicLibrary.open(libName);
   }
 
   void dispose() => _destroy(_player);
@@ -161,6 +229,8 @@ class AudioPlayerFFI {
   double getDuration() => _getDuration(_player);
   bool isPlaying() => _isPlaying(_player);
   void setEqBandGain(int bandIndex, double gain) => _setEqBandGain(_player, bandIndex, gain);
+  void setVolume(double volume) => _setVolume(_player, volume);
+  double getVolume() => _getVolume(_player);
 
   List<AudioFileInfo> scanDirectory(String dirPath) {
     final pathPtr = dirPath.toNativeUtf8();
@@ -171,10 +241,17 @@ class AudioPlayerFFI {
     final List<AudioFileInfo> files = [];
     for (var i = 0; i < count; i++) {
       final artPathPtr = _getScanAlbumArtPath(resultPtr, i);
+      final titlePtr = _getScanTitle(resultPtr, i);
+      final artistPtr = _getScanArtist(resultPtr, i);
+      final albumPtr = _getScanAlbum(resultPtr, i);
       files.add(AudioFileInfo(
         _getScanPath(resultPtr, i).toDartString(),
         _getScanFileName(resultPtr, i).toDartString(),
         artPathPtr == ffi.nullptr ? "" : artPathPtr.toDartString(),
+        title: titlePtr == ffi.nullptr ? "" : titlePtr.toDartString(),
+        artist: artistPtr == ffi.nullptr ? "" : artistPtr.toDartString(),
+        album: albumPtr == ffi.nullptr ? "" : albumPtr.toDartString(),
+        duration: _getScanDuration(resultPtr, i),
       ));
     }
     _destroyScanResult(resultPtr);

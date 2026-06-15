@@ -23,6 +23,14 @@ void AudioPlayer_setEqBandGain(AudioPlayerPtr player, int bandIndex, float gain)
     static_cast<AudioPlayer*>(player)->setEqBandGain(bandIndex, gain);
 }
 
+void AudioPlayer_setVolume(AudioPlayerPtr player, float volume) {
+    static_cast<AudioPlayer*>(player)->setVolume(volume);
+}
+
+float AudioPlayer_getVolume(AudioPlayerPtr player) {
+    return static_cast<AudioPlayer*>(player)->getVolume();
+}
+
 // --- FileScanner ---
 
 struct ScanResult { std::vector<AudioFileInfo> files; };
@@ -47,6 +55,27 @@ const char* ScanResult_getAlbumArtPath(ScanResultPtr result, int index) {
     if (!result) return nullptr;
     auto& files = static_cast<ScanResult*>(result)->files;
     return (index >= 0 && index < static_cast<int>(files.size())) ? files[index].albumArtPath.c_str() : nullptr;
+}
+
+const char* ScanResult_getTitle(ScanResultPtr result, int index) {
+    if (!result) return nullptr;
+    auto& files = static_cast<ScanResult*>(result)->files;
+    return (index >= 0 && index < static_cast<int>(files.size())) ? files[index].title.c_str() : nullptr;
+}
+const char* ScanResult_getArtist(ScanResultPtr result, int index) {
+    if (!result) return nullptr;
+    auto& files = static_cast<ScanResult*>(result)->files;
+    return (index >= 0 && index < static_cast<int>(files.size())) ? files[index].artist.c_str() : nullptr;
+}
+const char* ScanResult_getAlbum(ScanResultPtr result, int index) {
+    if (!result) return nullptr;
+    auto& files = static_cast<ScanResult*>(result)->files;
+    return (index >= 0 && index < static_cast<int>(files.size())) ? files[index].album.c_str() : nullptr;
+}
+float ScanResult_getDuration(ScanResultPtr result, int index) {
+    if (!result) return 0.0f;
+    auto& files = static_cast<ScanResult*>(result)->files;
+    return (index >= 0 && index < static_cast<int>(files.size())) ? files[index].durationSeconds : 0.0f;
 }
 
 void ScanResult_destroy(ScanResultPtr result) { if (result) delete static_cast<ScanResult*>(result); }

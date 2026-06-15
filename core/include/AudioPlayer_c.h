@@ -21,6 +21,8 @@ float AudioPlayer_getPosition(AudioPlayerPtr player);
 float AudioPlayer_getDuration(AudioPlayerPtr player);
 bool AudioPlayer_isPlaying(AudioPlayerPtr player);
 void AudioPlayer_setEqBandGain(AudioPlayerPtr player, int bandIndex, float gain);
+void AudioPlayer_setVolume(AudioPlayerPtr player, float volume);
+float AudioPlayer_getVolume(AudioPlayerPtr player);
 
 // File Scanner
 ScanResultPtr FileScanner_scan(const char* dirPath);
@@ -28,6 +30,10 @@ int ScanResult_getCount(ScanResultPtr result);
 const char* ScanResult_getPath(ScanResultPtr result, int index);
 const char* ScanResult_getFileName(ScanResultPtr result, int index);
 const char* ScanResult_getAlbumArtPath(ScanResultPtr result, int index);
+const char* ScanResult_getTitle(ScanResultPtr result, int index);
+const char* ScanResult_getArtist(ScanResultPtr result, int index);
+const char* ScanResult_getAlbum(ScanResultPtr result, int index);
+float ScanResult_getDuration(ScanResultPtr result, int index);
 void ScanResult_destroy(ScanResultPtr result);
 
 // Lyrics Parser
