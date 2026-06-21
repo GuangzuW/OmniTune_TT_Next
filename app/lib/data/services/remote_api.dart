@@ -44,6 +44,8 @@ class ApiClient {
 
   String? _token;
   bool get isLoggedIn => _token != null;
+  String? get token => _token;
+  set token(String? t) => _token = t;
 
   // ---- Aggregator (Audius) ----
 
@@ -67,6 +69,18 @@ class ApiClient {
     }
     final dir = await getTemporaryDirectory();
     final file = File(p.join(dir.path, 'audius_${track.id}.mp3'));
+    await file.writeAsBytes(resp.bodyBytes);
+    return file.path;
+  }
+
+  /// Downloads a track by its Audius id (used by the unified Track model).
+  Future<String> downloadById(String id) async {
+    final resp = await http.get(Uri.parse('$aggregatorUrl/stream/$id'));
+    if (resp.statusCode != 200) {
+      throw Exception('Stream failed: ${resp.statusCode}');
+    }
+    final dir = await getTemporaryDirectory();
+    final file = File(p.join(dir.path, 'audius_$id.mp3'));
     await file.writeAsBytes(resp.bodyBytes);
     return file.path;
   }
