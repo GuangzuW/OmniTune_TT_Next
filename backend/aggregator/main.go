@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -89,14 +90,41 @@ func main() {
 	}).Methods("GET")
 
 	r.HandleFunc("/stream/{id}", func(w http.ResponseWriter, r *http.Request) {
-		vars := mux.Vars(r)
-		id := vars["id"]
+		id := mux.Vars(r)["id"]
+		streamURL := audiusClient.GetStreamURL(id)
 
-		url := audiusClient.GetStreamURL(id)
+		// Proxy the audio bytes through the aggregator instead of redirecting.
+		// This keeps a single same-origin response (CORS-safe for the web app)
+		// and forwards HTTP Range so the client can seek / progressively buffer.
+		req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, streamURL, nil)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if rng := r.Header.Get("Range"); rng != "" {
+			req.Header.Set("Range", rng)
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			log.Printf("Stream error: %v", err)
+			http.Error(w, err.Error(), http.StatusBadGateway)
+			return
+		}
+		defer resp.Body.Close()
 
-		// For a real proxy, we would pipe the response, but redirecting
-		// handles most cases if CORS is configured correctly on Audius side.
-		http.Redirect(w, r, url, http.StatusFound)
+		for _, h := range []string{"Content-Type", "Content-Length", "Content-Range", "Accept-Ranges"} {
+			if v := resp.Header.Get(h); v != "" {
+				w.Header().Set(h, v)
+			}
+		}
+		if w.Header().Get("Content-Type") == "" {
+			w.Header().Set("Content-Type", "audio/mpeg")
+		}
+		if w.Header().Get("Accept-Ranges") == "" {
+			w.Header().Set("Accept-Ranges", "bytes")
+		}
+		w.WriteHeader(resp.StatusCode) // 200, or 206 for a Range request
+		io.Copy(w, resp.Body)
 	}).Methods("GET")
 
 	// Prometheus metrics endpoint.
