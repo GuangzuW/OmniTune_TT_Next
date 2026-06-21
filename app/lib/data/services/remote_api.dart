@@ -42,10 +42,16 @@ class ApiClient {
   static const String userSyncUrl =
       String.fromEnvironment('USERSYNC_URL', defaultValue: 'http://localhost:8001');
 
-  String? _token;
-  bool get isLoggedIn => _token != null;
-  String? get token => _token;
-  set token(String? t) => _token = t;
+  String? _accessToken;
+  String? _refreshToken;
+  bool get isLoggedIn => _accessToken != null;
+  String? get accessToken => _accessToken;
+  String? get refreshToken => _refreshToken;
+
+  void setTokens({String? access, String? refresh}) {
+    _accessToken = access;
+    if (refresh != null) _refreshToken = refresh;
+  }
 
   // ---- Aggregator (Audius) ----
 
@@ -102,16 +108,59 @@ class ApiClient {
     if (resp.statusCode != 200 && resp.statusCode != 201) {
       throw Exception('Auth failed (${resp.statusCode}): ${resp.body.trim()}');
     }
-    _token = (jsonDecode(resp.body) as Map<String, dynamic>)['token'] as String?;
+    final body = jsonDecode(resp.body) as Map<String, dynamic>;
+    _accessToken = (body['access'] ?? body['token']) as String?;
+    _refreshToken = body['refresh'] as String?;
   }
 
-  void logout() => _token = null;
+  /// Exchanges the refresh token for a fresh access token. Returns false if the
+  /// refresh token is missing/expired (caller should force re-login).
+  Future<bool> refresh() async {
+    if (_refreshToken == null) return false;
+    final resp = await http.post(
+      Uri.parse('$userSyncUrl/auth/refresh'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'refresh': _refreshToken}),
+    );
+    if (resp.statusCode != 200) {
+      _accessToken = null;
+      return false;
+    }
+    final body = jsonDecode(resp.body) as Map<String, dynamic>;
+    _accessToken = (body['access'] ?? body['token']) as String?;
+    return _accessToken != null;
+  }
 
-  /// Pushes a playlist (name + ordered tracks) to the server. Each track map
-  /// should contain ref/title/artist; position is derived from order.
+  Future<void> logout() async {
+    if (_refreshToken != null) {
+      try {
+        await http.post(
+          Uri.parse('$userSyncUrl/auth/logout'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'refresh': _refreshToken}),
+        );
+      } catch (_) {}
+    }
+    _accessToken = null;
+    _refreshToken = null;
+  }
+
+  /// Performs an authenticated request, transparently refreshing the access
+  /// token once on a 401 and retrying.
+  Future<http.Response> _authed(
+    Future<http.Response> Function(Map<String, String> headers) send,
+  ) async {
+    if (_accessToken == null) throw Exception('Not logged in');
+    var resp = await send({'Authorization': 'Bearer $_accessToken'});
+    if (resp.statusCode == 401 && await refresh()) {
+      resp = await send({'Authorization': 'Bearer $_accessToken'});
+    }
+    return resp;
+  }
+
+  /// Pushes a playlist (name + ordered tracks) to the server.
   Future<void> syncPlaylist(String name, List<Map<String, dynamic>> tracks) async {
-    _requireToken();
-    final body = {
+    final body = jsonEncode({
       'name': name,
       'tracks': [
         for (var i = 0; i < tracks.length; i++)
@@ -122,12 +171,12 @@ class ApiClient {
             'position': i,
           }
       ],
-    };
-    final resp = await http.post(
-      Uri.parse('$userSyncUrl/sync/playlist'),
-      headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $_token'},
-      body: jsonEncode(body),
-    );
+    });
+    final resp = await _authed((headers) => http.post(
+          Uri.parse('$userSyncUrl/sync/playlist'),
+          headers: {'Content-Type': 'application/json', ...headers},
+          body: body,
+        ));
     if (resp.statusCode != 200) {
       throw Exception('Sync failed (${resp.statusCode}): ${resp.body.trim()}');
     }
@@ -135,18 +184,13 @@ class ApiClient {
 
   /// Fetches all cloud playlists for the logged-in user.
   Future<List<dynamic>> fetchPlaylists() async {
-    _requireToken();
-    final resp = await http.get(
-      Uri.parse('$userSyncUrl/playlists'),
-      headers: {'Authorization': 'Bearer $_token'},
-    );
+    final resp = await _authed((headers) => http.get(
+          Uri.parse('$userSyncUrl/playlists'),
+          headers: headers,
+        ));
     if (resp.statusCode != 200) {
       throw Exception('Fetch failed (${resp.statusCode}): ${resp.body.trim()}');
     }
     return jsonDecode(resp.body) as List<dynamic>;
-  }
-
-  void _requireToken() {
-    if (_token == null) throw Exception('Not logged in');
   }
 }

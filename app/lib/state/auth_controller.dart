@@ -23,11 +23,21 @@ class AuthController extends Notifier<AuthState> {
   }
 
   Future<void> _restore() async {
-    final token = await SecureStore.readToken();
-    if (token != null && token.isNotEmpty) {
-      ref.read(apiClientProvider).token = token;
-      state = state.copyWith(loggedIn: true);
+    final access = await SecureStore.readToken();
+    final refresh = await SecureStore.readRefresh();
+    if ((access == null || access.isEmpty) && (refresh == null || refresh.isEmpty)) {
+      return;
     }
+    final api = ref.read(apiClientProvider);
+    api.setTokens(access: access, refresh: refresh);
+    // Access tokens are short-lived; mint a fresh one from the refresh token.
+    if (refresh != null && refresh.isNotEmpty) {
+      final ok = await api.refresh();
+      if (ok && api.accessToken != null) {
+        await SecureStore.writeToken(api.accessToken!);
+      }
+    }
+    state = state.copyWith(loggedIn: api.isLoggedIn);
   }
 
   Future<bool> login(String username, String password) =>
@@ -40,8 +50,9 @@ class AuthController extends Notifier<AuthState> {
     state = state.copyWith(busy: true, error: null);
     try {
       await action();
-      final token = ref.read(apiClientProvider).token;
-      if (token != null) await SecureStore.writeToken(token);
+      final api = ref.read(apiClientProvider);
+      if (api.accessToken != null) await SecureStore.writeToken(api.accessToken!);
+      if (api.refreshToken != null) await SecureStore.writeRefresh(api.refreshToken!);
       state = state.copyWith(busy: false, loggedIn: true);
       return true;
     } catch (e) {
@@ -51,8 +62,9 @@ class AuthController extends Notifier<AuthState> {
   }
 
   Future<void> logout() async {
-    ref.read(apiClientProvider).logout();
+    await ref.read(apiClientProvider).logout();
     await SecureStore.deleteToken();
+    await SecureStore.deleteRefresh();
     state = const AuthState();
   }
 }

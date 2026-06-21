@@ -33,7 +33,6 @@ dependencies:
 
   ffi: ^2.1.2
   http: ^1.2.0
-  dio: ^5.7.0
   file_picker: ^8.1.2
   path: ^1.9.0
   path_provider: ^2.1.2
@@ -44,6 +43,7 @@ dependencies:
   flutter_secure_storage: ^9.2.2
   cached_network_image: ^3.4.1
   google_fonts: ^6.2.1
+  connectivity_plus: ^6.1.0
   web: ^1.1.0
   sqflite: ^2.3.3
   sqflite_common_ffi: ^2.3.2+1

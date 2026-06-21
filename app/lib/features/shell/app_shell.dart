@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:app/core/theme/app_colors.dart';
 import 'package:app/core/theme/app_dimens.dart';
 import 'package:app/features/player/mini_player.dart';
+import 'package:app/features/shared/offline_banner.dart';
 
 class _Dest {
   final IconData icon;
@@ -37,7 +38,12 @@ class AppShell extends StatelessWidget {
 
     if (mobile) {
       return Scaffold(
-        body: navigationShell,
+        body: Column(
+          children: [
+            const OfflineBanner(),
+            Expanded(child: navigationShell),
+          ],
+        ),
         bottomNavigationBar: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -63,6 +69,7 @@ class AppShell extends StatelessWidget {
           Expanded(
             child: Column(
               children: [
+                const OfflineBanner(),
                 Expanded(child: navigationShell),
                 const MiniPlayer(),
               ],
