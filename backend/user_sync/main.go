@@ -2,7 +2,10 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"log"
@@ -28,6 +31,11 @@ var (
 type ctxKey string
 
 const userIDKey ctxKey = "userID"
+
+const (
+	accessTTL  = 15 * time.Minute
+	refreshTTL = 30 * 24 * time.Hour
+)
 
 // ---- models -----------------------------------------------------------------
 
@@ -73,6 +81,13 @@ func initSchema(db *sql.DB) error {
 			artist TEXT,
 			position INTEGER NOT NULL DEFAULT 0
 		)`,
+		`CREATE TABLE IF NOT EXISTS refresh_tokens (
+			id SERIAL PRIMARY KEY,
+			user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			token_hash TEXT UNIQUE NOT NULL,
+			expires_at TIMESTAMPTZ NOT NULL,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+		)`,
 	}
 	for _, s := range stmts {
 		if _, err := db.Exec(s); err != nil {
@@ -84,14 +99,63 @@ func initSchema(db *sql.DB) error {
 
 // ---- auth helpers -----------------------------------------------------------
 
-func issueToken(userID int) (string, error) {
+// issueAccessToken mints a short-lived JWT access token.
+func issueAccessToken(userID int) (string, error) {
 	claims := jwt.MapClaims{
 		"sub": userID,
-		"exp": time.Now().Add(72 * time.Hour).Unix(),
+		"exp": time.Now().Add(accessTTL).Unix(),
 		"iat": time.Now().Unix(),
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString(jwtSecret)
+}
+
+func hashToken(raw string) string {
+	sum := sha256.Sum256([]byte(raw))
+	return hex.EncodeToString(sum[:])
+}
+
+// issueRefreshToken creates an opaque long-lived refresh token and stores only
+// its hash, so a DB leak can't be replayed.
+func issueRefreshToken(userID int) (string, error) {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	raw := hex.EncodeToString(b)
+	_, err := db.Exec(
+		`INSERT INTO refresh_tokens (user_id, token_hash, expires_at) VALUES ($1, $2, $3)`,
+		userID, hashToken(raw), time.Now().Add(refreshTTL))
+	return raw, err
+}
+
+func consumeRefreshToken(raw string) (int, error) {
+	var userID int
+	var expires time.Time
+	err := db.QueryRow(
+		`SELECT user_id, expires_at FROM refresh_tokens WHERE token_hash = $1`, hashToken(raw)).
+		Scan(&userID, &expires)
+	if err != nil {
+		return 0, errors.New("invalid refresh token")
+	}
+	if time.Now().After(expires) {
+		return 0, errors.New("refresh token expired")
+	}
+	return userID, nil
+}
+
+func revokeRefreshToken(raw string) {
+	_, _ = db.Exec(`DELETE FROM refresh_tokens WHERE token_hash = $1`, hashToken(raw))
+}
+
+// writeTokens returns a token pair. "token" mirrors "access" for backward
+// compatibility with older clients that read a single token field.
+func writeTokens(w http.ResponseWriter, status int, access, refresh string) {
+	writeJSON(w, status, map[string]string{
+		"token":   access,
+		"access":  access,
+		"refresh": refresh,
+	})
 }
 
 func parseUserID(tokenStr string) (int, error) {
@@ -161,12 +225,17 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "user already exists", http.StatusConflict)
 		return
 	}
-	tok, err := issueToken(id)
+	access, err := issueAccessToken(id)
 	if err != nil {
 		http.Error(w, "token error", http.StatusInternalServerError)
 		return
 	}
-	writeJSON(w, http.StatusCreated, map[string]string{"token": tok})
+	refresh, err := issueRefreshToken(id)
+	if err != nil {
+		http.Error(w, "token error", http.StatusInternalServerError)
+		return
+	}
+	writeTokens(w, http.StatusCreated, access, refresh)
 }
 
 func handleLogin(w http.ResponseWriter, r *http.Request) {
@@ -186,12 +255,48 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid credentials", http.StatusUnauthorized)
 		return
 	}
-	tok, err := issueToken(id)
+	access, err := issueAccessToken(id)
 	if err != nil {
 		http.Error(w, "token error", http.StatusInternalServerError)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"token": tok})
+	refresh, err := issueRefreshToken(id)
+	if err != nil {
+		http.Error(w, "token error", http.StatusInternalServerError)
+		return
+	}
+	writeTokens(w, http.StatusOK, access, refresh)
+}
+
+func handleRefresh(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Refresh string `json:"refresh"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Refresh == "" {
+		http.Error(w, "refresh token required", http.StatusBadRequest)
+		return
+	}
+	userID, err := consumeRefreshToken(body.Refresh)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+	access, err := issueAccessToken(userID)
+	if err != nil {
+		http.Error(w, "token error", http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"token": access, "access": access})
+}
+
+func handleLogout(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Refresh string `json:"refresh"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err == nil && body.Refresh != "" {
+		revokeRefreshToken(body.Refresh)
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "logged out"})
 }
 
 // handleSyncPlaylist upserts the caller's playlist and replaces its tracks.
@@ -336,6 +441,8 @@ func main() {
 
 	r.HandleFunc("/auth/register", handleRegister).Methods("POST")
 	r.HandleFunc("/auth/login", handleLogin).Methods("POST")
+	r.HandleFunc("/auth/refresh", handleRefresh).Methods("POST")
+	r.HandleFunc("/auth/logout", handleLogout).Methods("POST")
 	r.HandleFunc("/sync/playlist", authMiddleware(handleSyncPlaylist)).Methods("POST")
 	r.HandleFunc("/playlists", authMiddleware(handleGetPlaylists)).Methods("GET")
 	r.Handle("/metrics", metrics.Handler())
