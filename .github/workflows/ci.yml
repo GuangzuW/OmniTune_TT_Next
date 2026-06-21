@@ -75,6 +75,29 @@ jobs:
         working-directory: app
         run: flutter test
 
+  build-macos:
+    name: Build macOS app
+    runs-on: macos-latest
+    needs: [flutter]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with: { channel: stable }
+      - name: Build native core
+        run: |
+          cmake -S core -B core/build
+          cmake --build core/build
+      - name: Build macOS app
+        working-directory: app
+        run: |
+          flutter pub get
+          flutter build macos --release
+      - name: Bundle native lib into the .app
+        run: |
+          APP=$(find app/build/macos -maxdepth 4 -name "*.app" -type d | head -n1)
+          mkdir -p "$APP/Contents/Frameworks"
+          cp core/build/libTTPlayerCore.dylib "$APP/Contents/Frameworks/" || true
+
   helm:
     name: Helm lint + schema validate
     runs-on: ubuntu-latest
