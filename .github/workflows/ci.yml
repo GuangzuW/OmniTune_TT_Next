@@ -58,6 +58,23 @@ jobs:
           npm install --no-audit --no-fund
           npm run build
 
+  flutter:
+    name: Flutter analyze + test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with: { channel: stable }
+      - name: Pub get
+        working-directory: app
+        run: flutter pub get
+      - name: Analyze
+        working-directory: app
+        run: flutter analyze
+      - name: Test
+        working-directory: app
+        run: flutter test
+
   helm:
     name: Helm lint + schema validate
     runs-on: ubuntu-latest
