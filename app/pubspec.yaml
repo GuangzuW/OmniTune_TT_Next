@@ -52,7 +52,7 @@ dependencies:
   screen_retriever: ^0.1.9
   audio_service: ^0.18.15
   window_manager: ^0.3.7
-  hotkey_manager: ^0.1.8
+  hotkey_manager: ^0.2.3
   desktop_drop: ^0.4.4
 
   # The following adds the Cupertino Icons font to your application.

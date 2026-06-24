@@ -82,7 +82,7 @@ Future<void> main() async {
 
 Future<void> _registerHotkeys(PlayerController player) async {
   Future<void> reg(KeyCode code, VoidCallback fn) => hotKeyManager.register(
-        HotKey(code, modifiers: [KeyModifier.alt], scope: HotKeyScope.system),
+        HotKey(key: code, modifiers: [HotKeyModifier.alt], scope: HotKeyScope.system),
         keyDownHandler: (_) => fn(),
       );
   try {
