@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hotkey_manager/hotkey_manager.dart';
 import 'package:window_manager/window_manager.dart';
@@ -81,15 +82,15 @@ Future<void> main() async {
 }
 
 Future<void> _registerHotkeys(PlayerController player) async {
-  Future<void> reg(KeyCode code, VoidCallback fn) => hotKeyManager.register(
-        HotKey(key: code, modifiers: [HotKeyModifier.alt], scope: HotKeyScope.system),
+  Future<void> reg(PhysicalKeyboardKey key, VoidCallback fn) => hotKeyManager.register(
+        HotKey(key: key, modifiers: [HotKeyModifier.alt], scope: HotKeyScope.system),
         keyDownHandler: (_) => fn(),
       );
   try {
-    await reg(KeyCode.keyP, player.togglePlay);
-    await reg(KeyCode.keyS, player.stop);
-    await reg(KeyCode.arrowRight, () => player.next());
-    await reg(KeyCode.arrowLeft, player.prev);
+    await reg(PhysicalKeyboardKey.keyP, player.togglePlay);
+    await reg(PhysicalKeyboardKey.keyS, player.stop);
+    await reg(PhysicalKeyboardKey.arrowRight, () => player.next());
+    await reg(PhysicalKeyboardKey.arrowLeft, player.prev);
   } catch (e) {
     debugPrint('Hotkey registration failed: $e');
   }
